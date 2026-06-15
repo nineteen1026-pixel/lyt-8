@@ -10,6 +10,7 @@ import type {
   GuestProfile,
   RepurchaseReminder,
 } from '@/types';
+import { normalizePhone } from '@/types';
 import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
 import { differenceInDays, parseISO } from 'date-fns';
 import { getInitialRooms, getInitialBookings } from '@/utils/mockData';
@@ -78,7 +79,19 @@ export const useAppStore = create<AppState>()(
 
       initializeData: () => {
         const { initialized, rooms, bookings } = get();
-        if (initialized && rooms.length > 0) return;
+        if (initialized && rooms.length > 0) {
+          const hasNonNormalized = bookings.some(
+            (b) => b.guestPhone !== normalizePhone(b.guestPhone)
+          );
+          if (hasNonNormalized) {
+            const normalizedBookings = bookings.map((b) => ({
+              ...b,
+              guestPhone: normalizePhone(b.guestPhone),
+            }));
+            set({ bookings: normalizedBookings });
+          }
+          return;
+        }
 
         const initialRooms = getInitialRooms();
         const initialBookings = getInitialBookings(initialRooms);
@@ -138,6 +151,7 @@ export const useAppStore = create<AppState>()(
         const now = new Date().toISOString();
         const newBooking: Booking = {
           ...booking,
+          guestPhone: normalizePhone(booking.guestPhone),
           id: generateId(),
           createdAt: now,
           updatedAt: now,
@@ -166,9 +180,13 @@ export const useAppStore = create<AppState>()(
         }
 
         const now = new Date().toISOString();
+        const updateData = { ...booking };
+        if (updateData.guestPhone !== undefined) {
+          updateData.guestPhone = normalizePhone(updateData.guestPhone);
+        }
         set((s) => ({
           bookings: s.bookings.map((b) =>
-            b.id === id ? { ...b, ...booking, updatedAt: now } : b
+            b.id === id ? { ...b, ...updateData, updatedAt: now } : b
           ),
         }));
         return true;
@@ -417,7 +435,7 @@ export const useAppStore = create<AppState>()(
         const phoneMap = new Map<string, Booking[]>();
 
         bookings.forEach((b) => {
-          const phone = b.guestPhone.trim();
+          const phone = normalizePhone(b.guestPhone);
           if (!phone) return;
           const list = phoneMap.get(phone) || [];
           list.push(b);
@@ -522,8 +540,9 @@ export const useAppStore = create<AppState>()(
       },
 
       getGuestProfileByPhone: (phone) => {
+        const normalized = normalizePhone(phone);
         const profiles = get().getGuestProfiles();
-        return profiles.find((p) => p.guestPhone === phone);
+        return profiles.find((p) => p.guestPhone === normalized);
       },
 
       getRepurchaseReminders: () => {

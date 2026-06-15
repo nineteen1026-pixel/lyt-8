@@ -12,7 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels } from '@/types';
+import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, normalizePhone } from '@/types';
 import { formatDateDisplay, calculateNights } from '@/utils/date';
 
 export default function GuestDetail() {
@@ -22,13 +22,14 @@ export default function GuestDetail() {
 
   const profile = useMemo(
     () => (phone ? getGuestProfileByPhone(decodeURIComponent(phone)) : undefined),
-    [phone, getGuestProfileByPhone]
+    [phone, getGuestProfileByPhone, bookings]
   );
 
   const guestBookings = useMemo(() => {
     if (!phone) return [];
+    const normalizedPhone = normalizePhone(decodeURIComponent(phone));
     return bookings
-      .filter((b) => b.guestPhone === decodeURIComponent(phone))
+      .filter((b) => normalizePhone(b.guestPhone) === normalizedPhone)
       .sort((a, b) => new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime());
   }, [phone, bookings]);
 

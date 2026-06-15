@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { GuestProfile, RepurchaseLevel } from '@/types';
-import { RepurchaseLevelLabels, RepurchaseLevelColors } from '@/types';
+import { RepurchaseLevelLabels, RepurchaseLevelColors, normalizePhone } from '@/types';
 import Badge from '@/components/Badge';
 import { formatDateDisplay } from '@/utils/date';
 
@@ -22,13 +22,13 @@ type FilterType = 'all' | RepurchaseLevel;
 
 export default function GuestList() {
   const navigate = useNavigate();
-  const { getGuestProfiles, getRepurchaseReminders } = useAppStore();
+  const { getGuestProfiles, getRepurchaseReminders, bookings } = useAppStore();
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
 
-  const allProfiles = useMemo(() => getGuestProfiles(), [getGuestProfiles]);
-  const reminders = useMemo(() => getRepurchaseReminders(), [getRepurchaseReminders]);
+  const allProfiles = useMemo(() => getGuestProfiles(), [getGuestProfiles, bookings]);
+  const reminders = useMemo(() => getRepurchaseReminders(), [getRepurchaseReminders, bookings]);
 
   const filteredProfiles = useMemo(() => {
     return allProfiles.filter((p) => {
@@ -38,9 +38,11 @@ export default function GuestList() {
       }
       if (search) {
         const lower = search.toLowerCase();
+        const normalizedSearch = normalizePhone(search);
         return (
           p.guestName.toLowerCase().includes(lower) ||
-          p.guestPhone.includes(search)
+          p.guestPhone.includes(search) ||
+          (normalizedSearch && p.guestPhone.includes(normalizedSearch))
         );
       }
       return true;

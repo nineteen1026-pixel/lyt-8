@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import type { Booking, BookingStatus } from '@/types';
-import { BookingStatusLabels, BookingStatusColors } from '@/types';
+import type { Booking, BookingStatus, GuestProfile } from '@/types';
+import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, normalizePhone } from '@/types';
 import Badge from '@/components/Badge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import BookingForm from './BookingForm';
@@ -21,6 +21,7 @@ export default function BookingList() {
     cancelBooking,
     getRoomById,
     updateBookingStatus,
+    getGuestProfiles,
   } = useAppStore();
 
   const [search, setSearch] = useState('');
@@ -45,15 +46,24 @@ export default function BookingList() {
     return room ? `${room.roomNumber} ${room.name}` : '未知房间';
   };
 
+  const guestProfileMap = useMemo(() => {
+    const profiles = getGuestProfiles();
+    const map = new Map<string, GuestProfile>();
+    profiles.forEach((p) => map.set(p.guestPhone, p));
+    return map;
+  }, [getGuestProfiles, bookings]);
+
   const filteredBookings = bookings
     .filter((b) => {
       if (statusFilter !== 'all' && b.status !== statusFilter) return false;
       if (search) {
         const lower = search.toLowerCase();
+        const normalizedSearch = normalizePhone(search);
         const room = getRoomById(b.roomId);
         return (
           b.guestName.toLowerCase().includes(lower) ||
           b.guestPhone.includes(search) ||
+          (normalizedSearch && b.guestPhone.includes(normalizedSearch)) ||
           (room?.roomNumber.includes(search) ?? false) ||
           (room?.name.toLowerCase().includes(lower) ?? false)
         );
@@ -163,6 +173,9 @@ export default function BookingList() {
                     客人信息
                   </th>
                   <th className="text-left text-sm font-medium text-brand-taupe px-5 py-3">
+                    消费频次 / 复购提醒
+                  </th>
+                  <th className="text-left text-sm font-medium text-brand-taupe px-5 py-3">
                     房间
                   </th>
                   <th className="text-left text-sm font-medium text-brand-taupe px-5 py-3">
@@ -186,6 +199,7 @@ export default function BookingList() {
                 {filteredBookings.map((b, idx) => {
                   const room = getRoomById(b.roomId);
                   const nights = calculateNights(b.checkIn, b.checkOut);
+                  const guestProfile = guestProfileMap.get(b.guestPhone);
 
                   return (
                     <tr
@@ -208,6 +222,37 @@ export default function BookingList() {
                             {b.guestPhone}
                           </div>
                         </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        {guestProfile ? (
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs text-brand-taupe">
+                                {guestProfile.validBookingCount} 次预订
+                              </span>
+                              <span className="text-xs text-brand-taupe">
+                                · ¥{guestProfile.totalSpending.toLocaleString()} 累计
+                              </span>
+                            </div>
+                            {guestProfile.repurchaseReminder && (
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  RepurchaseLevelColors[
+                                    guestProfile.repurchaseReminder.level
+                                  ]
+                                }`}
+                              >
+                                {
+                                  RepurchaseLevelLabels[
+                                    guestProfile.repurchaseReminder.level
+                                  ]
+                                }
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-brand-taupe">-</span>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <div className="font-medium text-brand-brown">

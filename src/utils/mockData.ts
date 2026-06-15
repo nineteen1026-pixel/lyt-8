@@ -1,4 +1,5 @@
 import type { Room, Booking } from '@/types';
+import { normalizePhone } from '@/types';
 import { generateId, todayStr, calculateNights } from './date';
 import { addDays, format, subMonths, subDays } from 'date-fns';
 
@@ -157,7 +158,7 @@ function generateHistoricalBookings(rooms: Room[]): Booking[] {
         id: generateId(),
         roomId: room.id,
         guestName: pickRandom(guestNames),
-        guestPhone: pickRandom(guestPhones),
+        guestPhone: normalizePhone(pickRandom(guestPhones)),
         checkIn: format(checkInDate, 'yyyy-MM-dd'),
         checkOut: format(checkOutDate, 'yyyy-MM-dd'),
         guests: Math.floor(Math.random() * 3) + 1,
@@ -185,7 +186,7 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       id: generateId(),
       roomId: rooms[0].id,
       guestName: '张先生',
-      guestPhone: '13800138001',
+      guestPhone: normalizePhone('13800138001'),
       guestIdCard: '110101199001011234',
       checkIn: format(addDays(today, -2), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 1), 'yyyy-MM-dd'),
@@ -200,7 +201,7 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       id: generateId(),
       roomId: rooms[1].id,
       guestName: '李女士',
-      guestPhone: '13900139002',
+      guestPhone: normalizePhone('13900139002'),
       guestIdCard: '110101199203045678',
       checkIn: todayStr(),
       checkOut: format(addDays(today, 2), 'yyyy-MM-dd'),
@@ -215,7 +216,7 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       id: generateId(),
       roomId: rooms[2].id,
       guestName: '王总',
-      guestPhone: '13700137003',
+      guestPhone: normalizePhone('13700137003'),
       guestIdCard: '310101198505069012',
       checkIn: format(addDays(today, 3), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 5), 'yyyy-MM-dd'),
@@ -230,7 +231,7 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       id: generateId(),
       roomId: rooms[3].id,
       guestName: '陈小姐',
-      guestPhone: '13600136004',
+      guestPhone: normalizePhone('13600136004'),
       checkIn: format(addDays(today, 1), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 4), 'yyyy-MM-dd'),
       guests: 2,
@@ -244,7 +245,7 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       id: generateId(),
       roomId: rooms[5].id,
       guestName: '赵先生一家',
-      guestPhone: '13500135005',
+      guestPhone: normalizePhone('13500135005'),
       checkIn: format(addDays(today, 7), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 10), 'yyyy-MM-dd'),
       guests: 4,
@@ -258,7 +259,7 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       id: generateId(),
       roomId: rooms[4].id,
       guestName: '孙先生',
-      guestPhone: '13400134006',
+      guestPhone: normalizePhone('13400134006'),
       checkIn: format(addDays(today, -5), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, -2), 'yyyy-MM-dd'),
       guests: 2,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Booking } from '@/types';
-import { BookingStatusLabels } from '@/types';
+import { BookingStatusLabels, normalizePhone } from '@/types';
 import Modal from '@/components/Modal';
 import { useAppStore } from '@/store/useAppStore';
 import { calculateNights, todayStr } from '@/utils/date';
@@ -120,7 +120,7 @@ export default function BookingForm({
     const submitData: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'> = {
       roomId: formData.roomId,
       guestName: formData.guestName.trim(),
-      guestPhone: formData.guestPhone.trim(),
+      guestPhone: normalizePhone(formData.guestPhone),
       guestIdCard: formData.guestIdCard.trim() || undefined,
       checkIn: formData.checkIn,
       checkOut: formData.checkOut,

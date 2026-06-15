@@ -142,4 +142,8 @@ export const RepurchaseLevelColors: Record<RepurchaseLevel, string> = {
   'churn-risk': 'bg-red-100 text-red-600',
 };
 
+export function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
 export type ReportGranularity = 'day' | 'month';
