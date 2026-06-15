@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import type { Booking, BookingStatus, GuestProfile } from '@/types';
-import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, normalizePhone } from '@/types';
+import type { Booking, BookingStatus, GuestProfile, RoomType } from '@/types';
+import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone } from '@/types';
 import Badge from '@/components/Badge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import BookingForm from './BookingForm';
@@ -26,6 +26,8 @@ export default function BookingList() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
+  const [roomTypeFilter, setRoomTypeFilter] = useState<RoomType | 'all'>('all');
+  const [roomIdFilter, setRoomIdFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
@@ -53,9 +55,19 @@ export default function BookingList() {
     return map;
   }, [getGuestProfiles, bookings]);
 
+  const filteredRooms = useMemo(() => {
+    if (roomTypeFilter === 'all') return rooms;
+    return rooms.filter((r) => r.type === roomTypeFilter);
+  }, [rooms, roomTypeFilter]);
+
   const filteredBookings = bookings
     .filter((b) => {
       if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+      if (roomTypeFilter !== 'all') {
+        const room = getRoomById(b.roomId);
+        if (!room || room.type !== roomTypeFilter) return false;
+      }
+      if (roomIdFilter !== 'all' && b.roomId !== roomIdFilter) return false;
       if (search) {
         const lower = search.toLowerCase();
         const normalizedSearch = normalizePhone(search);
@@ -71,6 +83,15 @@ export default function BookingList() {
       return true;
     })
     .sort((a, b) => new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime());
+
+  const handleRoomTypeChange = (value: RoomType | 'all') => {
+    setRoomTypeFilter(value);
+    setRoomIdFilter('all');
+  };
+
+  const handleJumpToCalendar = (date: string) => {
+    navigate(`/calendar?date=${date}`);
+  };
 
   const handleAdd = () => {
     setEditingBooking(null);
@@ -135,7 +156,7 @@ export default function BookingList() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-brand-taupe" />
             <select
               className="input-base !w-auto"
@@ -146,6 +167,30 @@ export default function BookingList() {
               {(Object.keys(BookingStatusLabels) as BookingStatus[]).map((s) => (
                 <option key={s} value={s}>
                   {BookingStatusLabels[s]}
+                </option>
+              ))}
+            </select>
+            <select
+              className="input-base !w-auto"
+              value={roomTypeFilter}
+              onChange={(e) => handleRoomTypeChange(e.target.value as RoomType | 'all')}
+            >
+              <option value="all">全部房型</option>
+              {(Object.keys(RoomTypeLabels) as RoomType[]).map((t) => (
+                <option key={t} value={t}>
+                  {RoomTypeLabels[t]}
+                </option>
+              ))}
+            </select>
+            <select
+              className="input-base !w-auto"
+              value={roomIdFilter}
+              onChange={(e) => setRoomIdFilter(e.target.value)}
+            >
+              <option value="all">全部房间</option>
+              {filteredRooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.roomNumber} {r.name}
                 </option>
               ))}
             </select>
@@ -261,10 +306,24 @@ export default function BookingList() {
                         <div className="text-xs text-brand-taupe">{b.guests}人入住</div>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="text-sm text-brand-brown">{formatDateDisplay(b.checkIn)}</div>
+                        <button
+                          onClick={() => handleJumpToCalendar(b.checkIn)}
+                          className="text-sm text-brand-brown hover:text-brand-orange transition-colors flex items-center gap-1 group"
+                          title="点击查看日历"
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-brand-taupe group-hover:text-brand-orange transition-colors" />
+                          {formatDateDisplay(b.checkIn)}
+                        </button>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="text-sm text-brand-brown">{formatDateDisplay(b.checkOut)}</div>
+                        <button
+                          onClick={() => handleJumpToCalendar(b.checkOut)}
+                          className="text-sm text-brand-brown hover:text-brand-orange transition-colors flex items-center gap-1 group"
+                          title="点击查看日历"
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-brand-taupe group-hover:text-brand-orange transition-colors" />
+                          {formatDateDisplay(b.checkOut)}
+                        </button>
                       </td>
                       <td className="px-5 py-4">
                         <div className="text-sm text-brand-brown">{nights}晚</div>

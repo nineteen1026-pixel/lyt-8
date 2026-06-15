@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Plus, X, BedDouble } from 'lucide-react';
-import { format, getMonth, getYear, isSameDay, isToday } from 'date-fns';
+import { format, getMonth, getYear, isSameDay, isToday, parseISO } from 'date-fns';
 import { useAppStore } from '@/store/useAppStore';
 import { getMonthMatrix, getWeekDays, formatMonth, todayStr, formatDateDisplay, calculateNights } from '@/utils/date';
 import type { Booking } from '@/types';
@@ -10,12 +11,39 @@ import Modal from '@/components/Modal';
 import BookingForm from './BookingForm';
 
 export default function CalendarView() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { rooms, bookings, getActiveBookingsByDate, getRoomById, addBooking, updateBooking } = useAppStore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [bookingFormOpen, setBookingFormOpen] = useState(false);
   const [prefillRoomId, setPrefillRoomId] = useState<string | undefined>();
   const [prefillCheckIn, setPrefillCheckIn] = useState<string | undefined>();
+
+  useEffect(() => {
+    const dateParam = searchParams.get('date');
+    if (dateParam) {
+      try {
+        const date = parseISO(dateParam);
+        if (!isNaN(date.getTime())) {
+          setCurrentDate(date);
+          setSelectedDate(dateParam);
+        }
+      } catch (e) {
+        // ignore invalid date
+      }
+    }
+  }, [searchParams]);
+
+  const handleDateClick = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    setSelectedDate(dateStr);
+    setSearchParams({ date: dateStr });
+  };
+
+  const handleCloseModal = () => {
+    setSelectedDate(null);
+    setSearchParams({});
+  };
 
   const activeRooms = rooms.filter((r) => r.status === 'active');
   const year = getYear(currentDate);
@@ -72,11 +100,8 @@ export default function CalendarView() {
 
   const handleToday = () => {
     setCurrentDate(new Date());
-  };
-
-  const handleDateClick = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    setSelectedDate(dateStr);
+    setSearchParams({});
+    setSelectedDate(null);
   };
 
   const handleNewBookingFromDate = (roomId?: string) => {
@@ -248,7 +273,7 @@ export default function CalendarView() {
 
       <Modal
         open={!!selectedDate}
-        onClose={() => setSelectedDate(null)}
+        onClose={handleCloseModal}
         title={selectedDate ? formatDateDisplay(selectedDate) : ''}
         size="xl"
       >
