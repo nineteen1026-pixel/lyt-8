@@ -7,21 +7,11 @@ import type {
   RoomStatus,
   DailyReportItem,
   MonthlyReportItem,
+  GuestProfile,
+  RepurchaseReminder,
 } from '@/types';
-import {
-  generateId,
-  isDateOverlap,
-  todayStr,
-  isSameDayStr,
-  getDaysInRange,
-  getMonthsInRange,
-  getMonthKey,
-  calculateNights,
-  getDaysArray,
-  startOfMonthStr,
-  endOfMonthStr,
-  formatDate,
-} from '@/utils/date';
+import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
+import { differenceInDays, parseISO } from 'date-fns';
 import { getInitialRooms, getInitialBookings } from '@/utils/mockData';
 
 interface AppState {
@@ -73,6 +63,10 @@ interface AppState {
     totalBookings: number;
     monthBookings: number;
   };
+
+  getGuestProfiles: () => GuestProfile[];
+  getGuestProfileByPhone: (phone: string) => GuestProfile | undefined;
+  getRepurchaseReminders: () => GuestProfile[];
 }
 
 export const useAppStore = create<AppState>()(
@@ -415,6 +409,131 @@ export const useAppStore = create<AppState>()(
           totalBookings,
           monthBookings,
         };
+      },
+
+      getGuestProfiles: () => {
+        const { bookings } = get();
+        const today = todayStr();
+        const phoneMap = new Map<string, Booking[]>();
+
+        bookings.forEach((b) => {
+          const phone = b.guestPhone.trim();
+          if (!phone) return;
+          const list = phoneMap.get(phone) || [];
+          list.push(b);
+          phoneMap.set(phone, list);
+        });
+
+        const profiles: GuestProfile[] = [];
+
+        phoneMap.forEach((guestBookings, phone) => {
+          const validBookings = guestBookings.filter(
+            (b) => b.status !== 'cancelled'
+          );
+          const latestName =
+            guestBookings
+              .filter((b) => b.status !== 'cancelled')
+              .sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime()
+              )[0]?.guestName || guestBookings[0].guestName;
+
+          const totalSpending = validBookings.reduce(
+            (sum, b) => sum + b.totalPrice,
+            0
+          );
+          const totalNights = validBookings.reduce(
+            (sum, b) => sum + calculateNights(b.checkIn, b.checkOut),
+            0
+          );
+
+          const sortedByCheckIn = [...validBookings].sort(
+            (a, b) =>
+              new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime()
+          );
+          const lastCheckIn = sortedByCheckIn[0]?.checkIn || '';
+          const lastCheckOut = sortedByCheckIn[0]?.checkOut || '';
+          const lastVisitDate = lastCheckOut;
+
+          const upcomingBookings = validBookings.filter(
+            (b) =>
+              (b.status === 'confirmed' || b.status === 'checked-in') &&
+              b.checkOut >= today
+          ).length;
+
+          let repurchaseReminder: RepurchaseReminder | null = null;
+          if (validBookings.length > 0) {
+            const lastCheckoutDate = lastCheckOut;
+            const daysSince = differenceInDays(
+              parseISO(today),
+              parseISO(lastCheckoutDate)
+            );
+
+            if (upcomingBookings > 0) {
+              repurchaseReminder = {
+                level: 'recent',
+                daysSinceLastVisit: Math.max(0, daysSince),
+                message: '有即将到访的预订',
+              };
+            } else if (daysSince < 0) {
+              repurchaseReminder = {
+                level: 'recent',
+                daysSinceLastVisit: 0,
+                message: '当前在住中',
+              };
+            } else if (daysSince <= 30) {
+              repurchaseReminder = {
+                level: 'recent',
+                daysSinceLastVisit: daysSince,
+                message: `${daysSince}天前曾到访`,
+              };
+            } else if (daysSince <= 90) {
+              repurchaseReminder = {
+                level: 'suggest',
+                daysSinceLastVisit: daysSince,
+                message: `已${daysSince}天未到访，建议回访`,
+              };
+            } else {
+              repurchaseReminder = {
+                level: 'churn-risk',
+                daysSinceLastVisit: daysSince,
+                message: `已${daysSince}天未到访，存在流失风险`,
+              };
+            }
+          }
+
+          profiles.push({
+            guestPhone: phone,
+            guestName: latestName,
+            bookingCount: guestBookings.length,
+            validBookingCount: validBookings.length,
+            totalSpending,
+            totalNights,
+            lastCheckIn,
+            lastCheckOut,
+            lastVisitDate,
+            upcomingBookings,
+            repurchaseReminder,
+          });
+        });
+
+        return profiles.sort((a, b) => b.validBookingCount - a.validBookingCount);
+      },
+
+      getGuestProfileByPhone: (phone) => {
+        const profiles = get().getGuestProfiles();
+        return profiles.find((p) => p.guestPhone === phone);
+      },
+
+      getRepurchaseReminders: () => {
+        const profiles = get().getGuestProfiles();
+        return profiles.filter(
+          (p) =>
+            p.repurchaseReminder &&
+            (p.repurchaseReminder.level === 'suggest' ||
+              p.repurchaseReminder.level === 'churn-risk')
+        );
       },
     }),
     {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Booking, BookingStatus } from '@/types';
 import { BookingStatusLabels, BookingStatusColors } from '@/types';
@@ -11,6 +11,7 @@ import Modal from '@/components/Modal';
 import { formatDateDisplay, calculateNights, isSameDayStr } from '@/utils/date';
 
 export default function BookingList() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     bookings,
@@ -344,6 +345,16 @@ export default function BookingList() {
                 <div className="font-medium text-brand-brown flex items-center gap-2">
                   <Phone className="w-4 h-4 text-brand-taupe" />
                   {detailBooking.guestPhone}
+                  <button
+                    onClick={() => {
+                      setDetailBooking(null);
+                      navigate(`/guests/${encodeURIComponent(detailBooking.guestPhone)}`);
+                    }}
+                    className="ml-1 p-1 rounded text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                    title="查看客人档案"
+                  >
+                    <UserCircle className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
               <div>

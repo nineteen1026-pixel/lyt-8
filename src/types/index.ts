@@ -108,4 +108,38 @@ export interface MonthlyReportItem {
   avgDailyRate: number;
 }
 
+export interface GuestProfile {
+  guestPhone: string;
+  guestName: string;
+  bookingCount: number;
+  validBookingCount: number;
+  totalSpending: number;
+  totalNights: number;
+  lastCheckIn: string;
+  lastCheckOut: string;
+  lastVisitDate: string;
+  upcomingBookings: number;
+  repurchaseReminder: RepurchaseReminder | null;
+}
+
+export type RepurchaseLevel = 'recent' | 'suggest' | 'churn-risk';
+
+export interface RepurchaseReminder {
+  level: RepurchaseLevel;
+  daysSinceLastVisit: number;
+  message: string;
+}
+
+export const RepurchaseLevelLabels: Record<RepurchaseLevel, string> = {
+  recent: '近期到访',
+  suggest: '建议回访',
+  'churn-risk': '流失风险',
+};
+
+export const RepurchaseLevelColors: Record<RepurchaseLevel, string> = {
+  recent: 'bg-green-100 text-green-700',
+  suggest: 'bg-amber-100 text-amber-700',
+  'churn-risk': 'bg-red-100 text-red-600',
+};
+
 export type ReportGranularity = 'day' | 'month';
