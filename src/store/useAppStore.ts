@@ -1,7 +1,26 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Room, Booking, BookingStatus, RoomStatus } from '@/types';
-import { generateId, isDateOverlap, todayStr, isSameDayStr } from '@/utils/date';
+import type {
+  Room,
+  Booking,
+  BookingStatus,
+  RoomStatus,
+  DailyReportItem,
+  MonthlyReportItem,
+} from '@/types';
+import {
+  generateId,
+  isDateOverlap,
+  todayStr,
+  isSameDayStr,
+  getDaysInRange,
+  getMonthsInRange,
+  getMonthKey,
+  calculateNights,
+  getDaysArray,
+  startOfMonthStr,
+  endOfMonthStr,
+} from '@/utils/date';
 import { getInitialRooms, getInitialBookings } from '@/utils/mockData';
 
 interface AppState {
@@ -40,6 +59,18 @@ interface AppState {
     availableToday: number;
     checkInToday: number;
     checkOutToday: number;
+  };
+
+  getDailyReport: (startDate: string, endDate: string) => DailyReportItem[];
+  getMonthlyReport: (startMonth: string, endMonth: string) => MonthlyReportItem[];
+  getRevenueStats: () => {
+    todayRevenue: number;
+    monthRevenue: number;
+    lastMonthRevenue: number;
+    monthOccupancyRate: number;
+    lastMonthOccupancyRate: number;
+    totalBookings: number;
+    monthBookings: number;
   };
 }
 
@@ -240,6 +271,145 @@ export const useAppStore = create<AppState>()(
           availableToday,
           checkInToday,
           checkOutToday,
+        };
+      },
+
+      getDailyReport: (startDate, endDate) => {
+        const { rooms, bookings } = get();
+        const days = getDaysInRange(startDate, endDate);
+        const totalRooms = rooms.filter((r) => r.status === 'active').length;
+        const validBookings = bookings.filter((b) => b.status !== 'cancelled');
+
+        return days.map((date) => {
+          const dayBookings = validBookings.filter((b) =>
+            isDateOverlap(b.checkIn, b.checkOut, date, date)
+          );
+
+          let dayRevenue = 0;
+          validBookings.forEach((b) => {
+            const bookingDays = getDaysArray(b.checkIn, b.checkOut);
+            if (bookingDays.includes(date)) {
+              const nights = calculateNights(b.checkIn, b.checkOut);
+              if (nights > 0) {
+                dayRevenue += b.totalPrice / nights;
+              }
+            }
+          });
+
+          const checkIns = validBookings.filter((b) =>
+            isSameDayStr(b.checkIn, date)
+          ).length;
+          const checkOuts = validBookings.filter((b) =>
+            isSameDayStr(b.checkOut, date)
+          ).length;
+
+          const occupiedRooms = dayBookings.length;
+          const occupancyRate =
+            totalRooms > 0 ? occupiedRooms / totalRooms : 0;
+
+          return {
+            date,
+            revenue: Math.round(dayRevenue * 100) / 100,
+            occupancyRate: Math.round(occupancyRate * 10000) / 100,
+            occupiedRooms,
+            totalRooms,
+            checkIns,
+            checkOuts,
+            bookings: checkIns,
+          };
+        });
+      },
+
+      getMonthlyReport: (startMonth, endMonth) => {
+        const { rooms, bookings } = get();
+        const months = getMonthsInRange(
+          startOfMonthStr(startMonth + '-01'),
+          endOfMonthStr(endMonth + '-01')
+        );
+        const totalRooms = rooms.filter((r) => r.status === 'active').length;
+        const validBookings = bookings.filter((b) => b.status !== 'cancelled');
+
+        return months.map((month) => {
+          const monthStart = startOfMonthStr(month + '-01');
+          const monthEnd = endOfMonthStr(month + '-01');
+          const daysInMonth = getDaysInRange(monthStart, monthEnd).length;
+
+          let monthRevenue = 0;
+          let totalOccupiedRoomNights = 0;
+          let totalNights = 0;
+
+          validBookings.forEach((b) => {
+            const bookingDays = getDaysArray(b.checkIn, b.checkOut);
+            const monthDays = getDaysArray(monthStart, monthEnd);
+            const overlappingDays = bookingDays.filter((d) =>
+              monthDays.includes(d)
+            );
+
+            if (overlappingDays.length > 0) {
+              const nights = calculateNights(b.checkIn, b.checkOut);
+              if (nights > 0) {
+                monthRevenue += (b.totalPrice / nights) * overlappingDays.length;
+              }
+              totalNights += overlappingDays.length;
+              totalOccupiedRoomNights += overlappingDays.length;
+            }
+          });
+
+          const avgOccupancyRate =
+            totalRooms > 0 && daysInMonth > 0
+              ? totalOccupiedRoomNights / (totalRooms * daysInMonth)
+              : 0;
+
+          const monthBookings = validBookings.filter(
+            (b) => getMonthKey(b.checkIn) === month
+          ).length;
+
+          const avgDailyRate = totalNights > 0 ? monthRevenue / totalNights : 0;
+
+          return {
+            month,
+            revenue: Math.round(monthRevenue * 100) / 100,
+            avgOccupancyRate: Math.round(avgOccupancyRate * 10000) / 100,
+            totalBookings: monthBookings,
+            totalNights,
+            avgDailyRate: Math.round(avgDailyRate * 100) / 100,
+          };
+        });
+      },
+
+      getRevenueStats: () => {
+        const { getDailyReport, getMonthlyReport, bookings } = get();
+        const today = todayStr();
+        const thisMonth = getMonthKey(today);
+        const lastMonthDate = new Date();
+        lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+        const lastMonth = getMonthKey(lastMonthDate);
+
+        const dailyReport = getDailyReport(today, today);
+        const todayRevenue = dailyReport[0]?.revenue || 0;
+
+        const monthlyReport = getMonthlyReport(thisMonth, thisMonth);
+        const monthRevenue = monthlyReport[0]?.revenue || 0;
+        const monthOccupancyRate = monthlyReport[0]?.avgOccupancyRate || 0;
+        const monthBookings = monthlyReport[0]?.totalBookings || 0;
+
+        const lastMonthReport = getMonthlyReport(lastMonth, lastMonth);
+        const lastMonthRevenue = lastMonthReport[0]?.revenue || 0;
+        const lastMonthOccupancyRate =
+          lastMonthReport[0]?.avgOccupancyRate || 0;
+
+        const totalBookings = bookings.filter(
+          (b) => b.status !== 'cancelled'
+        ).length;
+
+        return {
+          todayRevenue,
+          monthRevenue,
+          lastMonthRevenue,
+          monthOccupancyRate,
+          lastMonthOccupancyRate,
+          totalBookings,
+          monthBookings,
         };
       },
     }),

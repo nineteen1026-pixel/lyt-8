@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ClipboardList,
   Home,
+  BarChart3,
 } from 'lucide-react';
 
 const navItems = [
@@ -12,6 +13,7 @@ const navItems = [
   { path: '/rooms', label: '房间管理', icon: BedDouble },
   { path: '/calendar', label: '日历视图', icon: CalendarDays },
   { path: '/bookings', label: '预订管理', icon: ClipboardList },
+  { path: '/reports', label: '经营报表', icon: BarChart3 },
 ];
 
 export default function Layout() {

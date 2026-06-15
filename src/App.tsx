@@ -5,6 +5,7 @@ import Dashboard from '@/pages/Dashboard';
 import RoomList from '@/pages/RoomList';
 import Calendar from '@/pages/Calendar';
 import BookingList from '@/pages/BookingList';
+import Reports from '@/pages/Reports';
 import { useAppStore } from '@/store/useAppStore';
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/rooms" element={<RoomList />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/bookings" element={<BookingList />} />
+          <Route path="/reports" element={<Reports />} />
         </Route>
       </Routes>
     </Router>

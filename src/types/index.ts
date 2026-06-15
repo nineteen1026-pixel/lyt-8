@@ -87,3 +87,25 @@ export const CommonFacilities = [
   '咖啡机',
   '冰箱',
 ];
+
+export interface DailyReportItem {
+  date: string;
+  revenue: number;
+  occupancyRate: number;
+  occupiedRooms: number;
+  totalRooms: number;
+  checkIns: number;
+  checkOuts: number;
+  bookings: number;
+}
+
+export interface MonthlyReportItem {
+  month: string;
+  revenue: number;
+  avgOccupancyRate: number;
+  totalBookings: number;
+  totalNights: number;
+  avgDailyRate: number;
+}
+
+export type ReportGranularity = 'day' | 'month';

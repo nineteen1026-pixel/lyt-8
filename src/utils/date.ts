@@ -11,8 +11,10 @@ import {
   getDaysInMonth,
   getDay,
   startOfMonth,
+  endOfMonth,
   addMonths,
   subMonths,
+  eachMonthOfInterval,
 } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
@@ -117,4 +119,35 @@ export function prevMonth(date: Date): Date {
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+}
+
+export function getDaysInRange(start: string, end: string): string[] {
+  const days = eachDayOfInterval({
+    start: parseISO(start),
+    end: parseISO(end),
+  });
+  return days.map((d) => format(d, 'yyyy-MM-dd'));
+}
+
+export function getMonthsInRange(start: string, end: string): string[] {
+  const months = eachMonthOfInterval({
+    start: parseISO(start),
+    end: parseISO(end),
+  });
+  return months.map((m) => format(m, 'yyyy-MM'));
+}
+
+export function getMonthKey(date: string | Date): string {
+  const d = typeof date === 'string' ? parseISO(date) : date;
+  return format(d, 'yyyy-MM');
+}
+
+export function startOfMonthStr(date: string | Date): string {
+  const d = typeof date === 'string' ? parseISO(date) : date;
+  return format(startOfMonth(d), 'yyyy-MM-dd');
+}
+
+export function endOfMonthStr(date: string | Date): string {
+  const d = typeof date === 'string' ? parseISO(date) : date;
+  return format(endOfMonth(d), 'yyyy-MM-dd');
 }

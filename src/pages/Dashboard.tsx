@@ -7,16 +7,21 @@ import {
   Plus,
   ClipboardList,
   ArrowRight,
+  DollarSign,
+  TrendingUp,
+  BarChart3,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import Badge from '@/components/Badge';
 import { BookingStatusColors, BookingStatusLabels } from '@/types';
-import { todayStr, isSameDayStr, formatDateDisplay } from '@/utils/date';
+import { todayStr, isSameDayStr, formatDateDisplay, getMonthKey } from '@/utils/date';
+import { format, parseISO } from 'date-fns';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { getTodayStats, bookings, rooms } = useAppStore();
+  const { getTodayStats, getRevenueStats, bookings, rooms, getMonthlyReport } = useAppStore();
   const stats = getTodayStats();
+  const revenueStats = getRevenueStats();
   const today = todayStr();
 
   const todayCheckIns = bookings.filter(
@@ -56,6 +61,18 @@ export default function Dashboard() {
       icon: Users,
       gradient: 'from-brand-taupe to-brand-brownLight',
     },
+    {
+      label: '今日营收',
+      value: `¥${Math.round(revenueStats.todayRevenue).toLocaleString()}`,
+      icon: DollarSign,
+      gradient: 'from-amber-500 to-orange-400',
+    },
+    {
+      label: '本月营收',
+      value: `¥${Math.round(revenueStats.monthRevenue).toLocaleString()}`,
+      icon: TrendingUp,
+      gradient: 'from-emerald-500 to-teal-400',
+    },
   ];
 
   return (
@@ -67,13 +84,13 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
         {statCards.map((card, idx) => {
           const Icon = card.icon;
           return (
             <div
               key={card.label}
-              className="relative overflow-hidden rounded-2xl p-5 text-white shadow-card animate-slide-up"
+              className="relative overflow-hidden rounded-2xl p-4 text-white shadow-card animate-slide-up"
               style={{
                 background: `linear-gradient(135deg, var(--tw-gradient-stops))`,
                 animationDelay: `${idx * 80}ms`,
@@ -83,16 +100,16 @@ export default function Dashboard() {
                 className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-90`}
               />
               <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm opacity-90">{card.label}</span>
-                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                    <Icon className="w-5 h-5" />
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs opacity-90">{card.label}</span>
+                  <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                    <Icon className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="font-display text-4xl font-bold">{card.value}</div>
+                <div className="font-display text-2xl font-bold">{card.value}</div>
               </div>
-              <div className="absolute -right-6 -bottom-6 w-28 h-28 rounded-full bg-white/10" />
-              <div className="absolute -right-2 -top-2 w-16 h-16 rounded-full bg-white/10" />
+              <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/10" />
+              <div className="absolute -right-1 -top-1 w-12 h-12 rounded-full bg-white/10" />
             </div>
           );
         })}
@@ -105,7 +122,7 @@ export default function Dashboard() {
               快捷操作
             </h2>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <button
               onClick={() => navigate('/rooms')}
               className="group p-5 rounded-xl bg-gradient-to-br from-brand-beige to-white border border-brand-brown/10 hover:border-brand-brown/30 hover:shadow-soft transition-all text-left"
@@ -137,8 +154,18 @@ export default function Dashboard() {
               <p className="text-sm text-brand-taupe">查看和管理预订</p>
             </button>
             <button
+              onClick={() => navigate('/reports')}
+              className="group p-5 rounded-xl bg-gradient-to-br from-brand-beige to-white border border-brand-brown/10 hover:border-brand-brown/30 hover:shadow-soft transition-all text-left"
+            >
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-3 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                <BarChart3 className="w-6 h-6 text-emerald-500 group-hover:text-white transition-colors" />
+              </div>
+              <h3 className="font-semibold text-brand-brown mb-1">经营报表</h3>
+              <p className="text-sm text-brand-taupe">营收与入住率统计</p>
+            </button>
+            <button
               onClick={() => navigate('/bookings?action=new')}
-              className="group p-5 rounded-xl bg-gradient-to-br from-brand-brown/5 to-brand-brown/10 border border-brand-brown/20 hover:border-brand-brown/40 hover:shadow-soft transition-all text-left"
+              className="group p-5 rounded-xl bg-gradient-to-br from-brand-brown/5 to-brand-brown/10 border border-brand-brown/20 hover:border-brand-brown/40 hover:shadow-soft transition-all text-left lg:col-span-2"
             >
               <div className="w-12 h-12 rounded-xl bg-brand-brown flex items-center justify-center mb-3">
                 <Plus className="w-6 h-6 text-white" />
@@ -149,60 +176,108 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card-base p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-lg font-semibold text-brand-brown">
-              入住率概览
-            </h2>
-          </div>
-          <div className="flex flex-col items-center justify-center py-4">
-            <div className="relative w-36 h-36">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="42"
-                  fill="none"
-                  stroke="#F5F0E8"
-                  strokeWidth="10"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="42"
-                  fill="none"
-                  stroke="#8B5A2B"
-                  strokeWidth="10"
-                  strokeDasharray={`${
-                    stats.totalRooms > 0
-                      ? (stats.occupiedToday / stats.totalRooms) * 264
-                      : 0
-                  } 264`}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="font-display text-3xl font-bold text-brand-brown">
-                  {stats.totalRooms > 0
-                    ? Math.round((stats.occupiedToday / stats.totalRooms) * 100)
-                    : 0}
-                  %
-                </span>
-                <span className="text-xs text-brand-taupe">今日入住率</span>
+        <div className="space-y-5">
+          <div className="card-base p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg font-semibold text-brand-brown">
+                入住率概览
+              </h2>
+            </div>
+            <div className="flex flex-col items-center justify-center py-2">
+              <div className="relative w-32 h-32">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    fill="none"
+                    stroke="#F5F0E8"
+                    strokeWidth="10"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    fill="none"
+                    stroke="#8B5A2B"
+                    strokeWidth="10"
+                    strokeDasharray={`${
+                      stats.totalRooms > 0
+                        ? (stats.occupiedToday / stats.totalRooms) * 264
+                        : 0
+                    } 264`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="font-display text-2xl font-bold text-brand-brown">
+                    {stats.totalRooms > 0
+                      ? Math.round((stats.occupiedToday / stats.totalRooms) * 100)
+                      : 0}
+                    %
+                  </span>
+                  <span className="text-xs text-brand-taupe">今日入住率</span>
+                </div>
+              </div>
+              <div className="mt-4 w-full space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-brand-taupe">已占用</span>
+                  <span className="font-medium text-brand-brown">{stats.occupiedToday} 间</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-brand-taupe">空闲</span>
+                  <span className="font-medium text-brand-green">{stats.availableToday} 间</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-brand-taupe">总房间数</span>
+                  <span className="font-medium text-brand-brown">{stats.totalRooms} 间</span>
+                </div>
               </div>
             </div>
-            <div className="mt-6 w-full space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-brand-taupe">已占用</span>
-                <span className="font-medium text-brand-brown">{stats.occupiedToday} 间</span>
+          </div>
+
+          <div className="card-base p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg font-semibold text-brand-brown">
+                营收概览
+              </h2>
+              <button
+                onClick={() => navigate('/reports')}
+                className="text-xs text-brand-brown hover:text-brand-brownLight flex items-center gap-1"
+              >
+                查看详情 <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl">
+                <div className="text-xs text-brand-taupe mb-1">本月营收</div>
+                <div className="font-display text-2xl font-bold text-brand-orange">
+                  ¥{Math.round(revenueStats.monthRevenue).toLocaleString()}
+                </div>
+                <div className="text-xs text-brand-taupe mt-1">
+                  环比上月 {revenueStats.lastMonthRevenue > 0
+                    ? (revenueStats.monthRevenue - revenueStats.lastMonthRevenue) / revenueStats.lastMonthRevenue > 0
+                      ? '+'
+                      : ''
+                    : '+0'}
+                  {revenueStats.lastMonthRevenue > 0
+                    ? Math.round(((revenueStats.monthRevenue - revenueStats.lastMonthRevenue) / revenueStats.lastMonthRevenue) * 100)
+                    : 0}%
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-brand-taupe">空闲</span>
-                <span className="font-medium text-brand-green">{stats.availableToday} 间</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-brand-taupe">总房间数</span>
-                <span className="font-medium text-brand-brown">{stats.totalRooms} 间</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-brand-beige/50 rounded-lg">
+                  <div className="text-xs text-brand-taupe mb-1">今日营收</div>
+                  <div className="font-display text-lg font-bold text-brand-brown">
+                    ¥{Math.round(revenueStats.todayRevenue)}
+                  </div>
+                </div>
+                <div className="p-3 bg-brand-beige/50 rounded-lg">
+                  <div className="text-xs text-brand-taupe mb-1">本月预订</div>
+                  <div className="font-display text-lg font-bold text-brand-brown">
+                    {revenueStats.monthBookings} 笔
+                  </div>
+                </div>
               </div>
             </div>
           </div>
