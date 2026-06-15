@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #3D3226;
+  background-color: #FFF9F0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #FFF9F0;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F0E8;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C8C0B0;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #A67B5B;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-brown text-white hover:bg-brand-brownLight focus:ring-brand-brown shadow-sm;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white text-brand-brown border border-brand-brown/30 hover:bg-brand-cream focus:ring-brand-brown/30;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-500 text-white hover:bg-red-600 focus:ring-red-300;
+  }
+
+  .btn-ghost {
+    @apply btn text-brand-taupe hover:bg-brand-beige focus:ring-brand-brown/20;
+  }
+
+  .input-base {
+    @apply w-full px-3 py-2 bg-white border border-brand-brown/20 rounded-lg text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-brown/30 focus:border-brand-brown/50;
+  }
+
+  .label-base {
+    @apply block text-sm font-medium text-brand-taupe mb-1.5;
+  }
+
+  .card-base {
+    @apply bg-white rounded-xl shadow-soft border border-brand-brown/5;
+  }
+}
