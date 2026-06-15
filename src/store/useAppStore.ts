@@ -20,6 +20,7 @@ import {
   getDaysArray,
   startOfMonthStr,
   endOfMonthStr,
+  formatDate,
 } from '@/utils/date';
 import { getInitialRooms, getInitialBookings } from '@/utils/mockData';
 
@@ -302,6 +303,9 @@ export const useAppStore = create<AppState>()(
           const checkOuts = validBookings.filter((b) =>
             isSameDayStr(b.checkOut, date)
           ).length;
+          const newBookings = bookings.filter((b) =>
+            formatDate(b.createdAt) === date
+          ).length;
 
           const occupiedRooms = dayBookings.length;
           const occupancyRate =
@@ -315,7 +319,7 @@ export const useAppStore = create<AppState>()(
             totalRooms,
             checkIns,
             checkOuts,
-            bookings: checkIns,
+            bookings: newBookings,
           };
         });
       },

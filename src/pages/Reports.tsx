@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   BarChart3,
   TrendingUp,
@@ -13,33 +13,30 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { ReportGranularity, DailyReportItem, MonthlyReportItem } from '@/types';
-import { formatDateDisplay, formatMonth, todayStr, getMonthKey, startOfMonthStr, endOfMonthStr } from '@/utils/date';
-import { format, parseISO, subMonths } from 'date-fns';
+import {
+  formatDateDisplay,
+  formatMonth,
+  todayStr,
+  getMonthKey,
+  startOfMonthStr,
+  endOfMonthStr,
+} from '@/utils/date';
+import { format, parseISO, subMonths, subDays, addDays, addMonths } from 'date-fns';
 
 export default function Reports() {
   const { getDailyReport, getMonthlyReport, getRevenueStats } = useAppStore();
   const [granularity, setGranularity] = useState<ReportGranularity>('month');
-  const [currentDate, setCurrentDate] = useState(todayStr());
+  const [startDate, setStartDate] = useState(() => {
+    const d = subMonths(new Date(), 5);
+    return format(startOfMonthStr(d), 'yyyy-MM-dd');
+  });
+  const [endDate, setEndDate] = useState(todayStr());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const revenueStats = getRevenueStats();
 
-  const { startDate, endDate } = useMemo(() => {
-    if (granularity === 'day') {
-      const start = format(
-        new Date(parseISO(currentDate).getFullYear(), parseISO(currentDate).getMonth(), 1),
-        'yyyy-MM-dd'
-      );
-      const end = format(
-        new Date(parseISO(currentDate).getFullYear(), parseISO(currentDate).getMonth() + 1, 0),
-        'yyyy-MM-dd'
-      );
-      return { startDate: start, endDate: end };
-    } else {
-      const currentMonth = getMonthKey(currentDate);
-      const startMonth = format(subMonths(parseISO(currentMonth + '-01'), 5), 'yyyy-MM');
-      return { startDate: startMonth, endDate: currentMonth };
-    }
-  }, [granularity, currentDate]);
+  const displayStart = granularity === 'day' ? startDate : getMonthKey(startDate);
+  const displayEnd = granularity === 'day' ? endDate : getMonthKey(endDate);
 
   const dailyData = useMemo(() => {
     if (granularity === 'day') {
@@ -50,7 +47,7 @@ export default function Reports() {
 
   const monthlyData = useMemo(() => {
     if (granularity === 'month') {
-      return getMonthlyReport(startDate, endDate);
+      return getMonthlyReport(getMonthKey(startDate), getMonthKey(endDate));
     }
     return [];
   }, [granularity, startDate, endDate, getMonthlyReport]);
@@ -89,27 +86,81 @@ export default function Reports() {
     return Math.max(...data.map((item) => item.revenue), 1);
   }, [granularity, dailyData, monthlyData]);
 
-  const handlePrevPeriod = () => {
-    if (granularity === 'day') {
-      const date = parseISO(currentDate);
-      date.setMonth(date.getMonth() - 1);
-      setCurrentDate(format(date, 'yyyy-MM-dd'));
+  const handleGranularityChange = (g: ReportGranularity) => {
+    setGranularity(g);
+    if (g === 'day') {
+      const today = new Date();
+      setStartDate(format(subDays(today, 29), 'yyyy-MM-dd'));
+      setEndDate(todayStr());
     } else {
-      const date = parseISO(currentDate);
-      date.setMonth(date.getMonth() - 6);
-      setCurrentDate(format(date, 'yyyy-MM-dd'));
+      const today = new Date();
+      setStartDate(startOfMonthStr(subMonths(today, 5)));
+      setEndDate(todayStr());
+    }
+  };
+
+  const handlePrevPeriod = () => {
+    const start = parseISO(startDate);
+    const end = parseISO(endDate);
+    const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    if (granularity === 'day') {
+      const newStart = subDays(start, diffDays);
+      const newEnd = subDays(end, diffDays);
+      setStartDate(format(newStart, 'yyyy-MM-dd'));
+      setEndDate(format(newEnd, 'yyyy-MM-dd'));
+    } else {
+      const monthDiff =
+        (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+      const newStart = subMonths(start, monthDiff);
+      const newEnd = subMonths(end, monthDiff);
+      setStartDate(format(newStart, 'yyyy-MM-dd'));
+      setEndDate(format(newEnd, 'yyyy-MM-dd'));
     }
   };
 
   const handleNextPeriod = () => {
+    const start = parseISO(startDate);
+    const end = parseISO(endDate);
+    const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
     if (granularity === 'day') {
-      const date = parseISO(currentDate);
-      date.setMonth(date.getMonth() + 1);
-      setCurrentDate(format(date, 'yyyy-MM-dd'));
+      const newStart = addDays(start, diffDays);
+      const newEnd = addDays(end, diffDays);
+      setStartDate(format(newStart, 'yyyy-MM-dd'));
+      setEndDate(format(newEnd, 'yyyy-MM-dd'));
     } else {
-      const date = parseISO(currentDate);
-      date.setMonth(date.getMonth() + 6);
-      setCurrentDate(format(date, 'yyyy-MM-dd'));
+      const monthDiff =
+        (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+      const newStart = addMonths(start, monthDiff);
+      const newEnd = addMonths(end, monthDiff);
+      setStartDate(format(newStart, 'yyyy-MM-dd'));
+      setEndDate(format(newEnd, 'yyyy-MM-dd'));
+    }
+  };
+
+  const quickRanges = [
+    { label: '今日', days: 0 },
+    { label: '近7天', days: 6 },
+    { label: '近30天', days: 29 },
+    { label: '本月', isMonth: 'current' },
+    { label: '上月', isMonth: 'last' },
+  ];
+
+  const handleQuickRange = (range: typeof quickRanges[0]) => {
+    const today = new Date();
+    if ('isMonth' in range) {
+      if (range.isMonth === 'current') {
+        setStartDate(startOfMonthStr(today));
+        setEndDate(todayStr());
+      } else {
+        const lastMonth = subMonths(today, 1);
+        setStartDate(startOfMonthStr(lastMonth));
+        setEndDate(endOfMonthStr(lastMonth));
+      }
+    } else {
+      setStartDate(format(subDays(today, range.days), 'yyyy-MM-dd'));
+      setEndDate(todayStr());
     }
   };
 
@@ -121,7 +172,7 @@ export default function Reports() {
     let rows: string[][];
 
     if (granularity === 'day') {
-      headers = ['日期', '营收(元)', '入住率(%)', '已占用房间', '入住数', '退房数', '新预订'];
+      headers = ['日期', '营收(元)', '入住率(%)', '已占用房间', '入住数', '退房数', '新预订(下单日)'];
       rows = (data as DailyReportItem[]).map((item) => [
         formatDateDisplay(item.date),
         item.revenue.toFixed(2),
@@ -183,7 +234,7 @@ export default function Reports() {
   const periodLabel =
     granularity === 'day'
       ? `${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}`
-      : `${formatMonth((monthlyData[0]?.month || '') + '-01')} - ${formatMonth((monthlyData[monthlyData.length - 1]?.month || '') + '-01')}`;
+      : `${formatMonth(displayStart + '-01')} - ${formatMonth(displayEnd + '-01')}`;
 
   return (
     <div className="animate-fade-in">
@@ -233,51 +284,162 @@ export default function Reports() {
       </div>
 
       <div className="card-base p-6 mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-2">
-            <div className="flex bg-brand-beige/50 rounded-lg p-1">
-              <button
-                onClick={() => setGranularity('day')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  granularity === 'day'
-                    ? 'bg-white text-brand-brown shadow-sm'
-                    : 'text-brand-taupe hover:text-brand-brown'
-                }`}
-              >
-                按日统计
-              </button>
-              <button
-                onClick={() => setGranularity('month')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  granularity === 'month'
-                    ? 'bg-white text-brand-brown shadow-sm'
-                    : 'text-brand-taupe hover:text-brand-brown'
-                }`}
-              >
-                按月统计
-              </button>
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex bg-brand-beige/50 rounded-lg p-1">
+                <button
+                  onClick={() => handleGranularityChange('day')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    granularity === 'day'
+                      ? 'bg-white text-brand-brown shadow-sm'
+                      : 'text-brand-taupe hover:text-brand-brown'
+                  }`}
+                >
+                  按日统计
+                </button>
+                <button
+                  onClick={() => handleGranularityChange('month')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    granularity === 'month'
+                      ? 'bg-white text-brand-brown shadow-sm'
+                      : 'text-brand-taupe hover:text-brand-brown'
+                  }`}
+                >
+                  按月统计
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handlePrevPeriod}
-              className="p-2 rounded-lg border border-brand-brown/10 text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2 px-4 py-2 bg-brand-beige/30 rounded-lg">
-              <CalendarIcon className="w-4 h-4 text-brand-taupe" />
-              <span className="text-sm font-medium text-brand-brown">
-                {periodLabel}
-              </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handlePrevPeriod}
+                className="p-2 rounded-lg border border-brand-brown/10 text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                title="上一周期"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowDatePicker(!showDatePicker)}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand-beige/30 rounded-lg hover:bg-brand-beige/50 transition-colors"
+                >
+                  <CalendarIcon className="w-4 h-4 text-brand-taupe" />
+                  <span className="text-sm font-medium text-brand-brown">
+                    {periodLabel}
+                  </span>
+                </button>
+
+                {showDatePicker && (
+                  <div className="absolute right-0 top-full mt-2 z-20 bg-white rounded-xl shadow-lg border border-brand-brown/10 p-4 w-80">
+                    <div className="mb-4">
+                      <div className="text-sm font-medium text-brand-brown mb-2">快捷选择</div>
+                      <div className="flex flex-wrap gap-2">
+                        {granularity === 'day' ? (
+                          <>
+                            {quickRanges.map((range) => (
+                              <button
+                                key={range.label}
+                                onClick={() => {
+                                  handleQuickRange(range);
+                                  setShowDatePicker(false);
+                                }}
+                                className="px-3 py-1.5 text-xs bg-brand-beige/50 text-brand-brown rounded-lg hover:bg-brand-beige transition-colors"
+                              >
+                                {range.label}
+                              </button>
+                            ))}
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => {
+                                const today = new Date();
+                                setStartDate(startOfMonthStr(subMonths(today, 2)));
+                                setEndDate(todayStr());
+                                setShowDatePicker(false);
+                              }}
+                              className="px-3 py-1.5 text-xs bg-brand-beige/50 text-brand-brown rounded-lg hover:bg-brand-beige transition-colors"
+                            >
+                              近3个月
+                            </button>
+                            <button
+                              onClick={() => {
+                                const today = new Date();
+                                setStartDate(startOfMonthStr(subMonths(today, 5)));
+                                setEndDate(todayStr());
+                                setShowDatePicker(false);
+                              }}
+                              className="px-3 py-1.5 text-xs bg-brand-beige/50 text-brand-brown rounded-lg hover:bg-brand-beige transition-colors"
+                            >
+                              近6个月
+                            </button>
+                            <button
+                              onClick={() => {
+                                const today = new Date();
+                                setStartDate(startOfMonthStr(today));
+                                setEndDate(todayStr());
+                                setShowDatePicker(false);
+                              }}
+                              className="px-3 py-1.5 text-xs bg-brand-beige/50 text-brand-brown rounded-lg hover:bg-brand-beige transition-colors"
+                            >
+                              本月
+                            </button>
+                            <button
+                              onClick={() => {
+                                const lastMonth = subMonths(new Date(), 1);
+                                setStartDate(startOfMonthStr(lastMonth));
+                                setEndDate(endOfMonthStr(lastMonth));
+                                setShowDatePicker(false);
+                              }}
+                              className="px-3 py-1.5 text-xs bg-brand-beige/50 text-brand-brown rounded-lg hover:bg-brand-beige transition-colors"
+                            >
+                              上月
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="border-t border-brand-brown/10 pt-4">
+                      <div className="text-sm font-medium text-brand-brown mb-3">自定义日期</div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs text-brand-taupe mb-1">开始日期</label>
+                          <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="w-full px-3 py-2 border border-brand-brown/10 rounded-lg text-sm text-brand-brown focus:outline-none focus:border-brand-brown/30"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-brand-taupe mb-1">结束日期</label>
+                          <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="w-full px-3 py-2 border border-brand-brown/10 rounded-lg text-sm text-brand-brown focus:outline-none focus:border-brand-brown/30"
+                          />
+                        </div>
+                        <button
+                          onClick={() => setShowDatePicker(false)}
+                          className="w-full btn-primary py-2 text-sm"
+                        >
+                          确定
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleNextPeriod}
+                className="p-2 rounded-lg border border-brand-brown/10 text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                title="下一周期"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
             </div>
-            <button
-              onClick={handleNextPeriod}
-              className="p-2 rounded-lg border border-brand-brown/10 text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
           </div>
         </div>
 
@@ -288,7 +450,7 @@ export default function Reports() {
               {granularity === 'day' ? '每日' : '每月'}营收趋势
             </h3>
           </div>
-          <div className="h-64 flex items-end gap-2 px-2">
+          <div className="h-64 flex items-end gap-2 px-2 overflow-x-auto">
             {(granularity === 'day' ? dailyData : monthlyData).map((item, idx) => {
               const heightPercent = (item.revenue / maxRevenue) * 100;
               const label =
@@ -299,9 +461,9 @@ export default function Reports() {
               return (
                 <div
                   key={idx}
-                  className="flex-1 flex flex-col items-center gap-2 group"
+                  className="flex-1 min-w-[30px] flex flex-col items-center gap-2 group"
                 >
-                  <div className="text-xs text-brand-taupe opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="text-xs text-brand-taupe opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     ¥{item.revenue.toFixed(0)}
                   </div>
                   <div
@@ -323,7 +485,7 @@ export default function Reports() {
               {granularity === 'day' ? '每日' : '每月'}入住率
             </h3>
           </div>
-          <div className="h-48 flex items-end gap-2 px-2">
+          <div className="h-48 flex items-end gap-2 px-2 overflow-x-auto">
             {(granularity === 'day' ? dailyData : monthlyData).map((item, idx) => {
               const rate =
                 granularity === 'day'
@@ -337,9 +499,9 @@ export default function Reports() {
               return (
                 <div
                   key={idx}
-                  className="flex-1 flex flex-col items-center gap-2 group"
+                  className="flex-1 min-w-[30px] flex flex-col items-center gap-2 group"
                 >
-                  <div className="text-xs text-brand-taupe opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="text-xs text-brand-taupe opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     {rate.toFixed(1)}%
                   </div>
                   <div

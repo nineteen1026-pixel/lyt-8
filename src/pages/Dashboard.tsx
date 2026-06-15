@@ -183,8 +183,8 @@ export default function Dashboard() {
                 入住率概览
               </h2>
             </div>
-            <div className="flex flex-col items-center justify-center py-2">
-              <div className="relative w-32 h-32">
+            <div className="flex justify-around items-center mb-4">
+              <div className="relative w-24 h-24">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                   <circle
                     cx="50"
@@ -210,28 +210,65 @@ export default function Dashboard() {
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="font-display text-2xl font-bold text-brand-brown">
+                  <span className="font-display text-xl font-bold text-brand-brown">
                     {stats.totalRooms > 0
                       ? Math.round((stats.occupiedToday / stats.totalRooms) * 100)
                       : 0}
                     %
                   </span>
-                  <span className="text-xs text-brand-taupe">今日入住率</span>
+                  <span className="text-xs text-brand-taupe">今日</span>
                 </div>
               </div>
-              <div className="mt-4 w-full space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">已占用</span>
-                  <span className="font-medium text-brand-brown">{stats.occupiedToday} 间</span>
+              <div className="relative w-24 h-24">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    fill="none"
+                    stroke="#F5F0E8"
+                    strokeWidth="10"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    fill="none"
+                    stroke="#10B981"
+                    strokeWidth="10"
+                    strokeDasharray={`${
+                      revenueStats.monthOccupancyRate * 2.64
+                    } 264`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="font-display text-xl font-bold text-brand-green">
+                    {Math.round(revenueStats.monthOccupancyRate)}%
+                  </span>
+                  <span className="text-xs text-brand-taupe">本月</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">空闲</span>
-                  <span className="font-medium text-brand-green">{stats.availableToday} 间</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-taupe">总房间数</span>
-                  <span className="font-medium text-brand-brown">{stats.totalRooms} 间</span>
-                </div>
+              </div>
+            </div>
+            <div className="w-full space-y-2 text-sm border-t border-brand-brown/10 pt-4">
+              <div className="flex justify-between">
+                <span className="text-brand-taupe">今日已占用</span>
+                <span className="font-medium text-brand-brown">{stats.occupiedToday} 间</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-brand-taupe">今日空闲</span>
+                <span className="font-medium text-brand-green">{stats.availableToday} 间</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-brand-taupe">本月环比</span>
+                <span className={`font-medium ${
+                  revenueStats.monthOccupancyRate >= revenueStats.lastMonthOccupancyRate
+                    ? 'text-brand-green'
+                    : 'text-red-500'
+                }`}>
+                  {revenueStats.monthOccupancyRate >= revenueStats.lastMonthOccupancyRate ? '+' : ''}
+                  {(revenueStats.monthOccupancyRate - revenueStats.lastMonthOccupancyRate).toFixed(1)}%
+                </span>
               </div>
             </div>
           </div>
