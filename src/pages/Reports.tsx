@@ -10,6 +10,8 @@ import {
   Users,
   BedDouble,
   Percent,
+  Building2,
+  Filter,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { ReportGranularity, DailyReportItem, MonthlyReportItem } from '@/types';
@@ -24,7 +26,13 @@ import {
 import { format, parseISO, subMonths, subDays, addDays, addMonths } from 'date-fns';
 
 export default function Reports() {
-  const { getDailyReport, getMonthlyReport, getRevenueStats } = useAppStore();
+  const {
+    stores,
+    getDailyReport,
+    getMonthlyReport,
+    getRevenueStats,
+  } = useAppStore();
+  const [storeFilter, setStoreFilter] = useState<string>('all');
   const [granularity, setGranularity] = useState<ReportGranularity>('month');
   const [startDate, setStartDate] = useState(() => {
     const d = subMonths(new Date(), 5);
@@ -33,24 +41,24 @@ export default function Reports() {
   const [endDate, setEndDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const revenueStats = getRevenueStats();
+  const revenueStats = getRevenueStats(storeFilter);
 
   const displayStart = granularity === 'day' ? startDate : getMonthKey(startDate);
   const displayEnd = granularity === 'day' ? endDate : getMonthKey(endDate);
 
   const dailyData = useMemo(() => {
     if (granularity === 'day') {
-      return getDailyReport(startDate, endDate);
+      return getDailyReport(startDate, endDate, storeFilter);
     }
     return [];
-  }, [granularity, startDate, endDate, getDailyReport]);
+  }, [granularity, startDate, endDate, getDailyReport, storeFilter]);
 
   const monthlyData = useMemo(() => {
     if (granularity === 'month') {
-      return getMonthlyReport(getMonthKey(startDate), getMonthKey(endDate));
+      return getMonthlyReport(getMonthKey(startDate), getMonthKey(endDate), storeFilter);
     }
     return [];
-  }, [granularity, startDate, endDate, getMonthlyReport]);
+  }, [granularity, startDate, endDate, getMonthlyReport, storeFilter]);
 
   const summary = useMemo(() => {
     const data = granularity === 'day' ? dailyData : monthlyData;
@@ -250,6 +258,30 @@ export default function Reports() {
           <Download className="w-4 h-4" />
           导出报表
         </button>
+      </div>
+
+      <div className="card-base p-4 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="w-4 h-4 text-brand-taupe" />
+          <select
+            className="input-base !w-auto"
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+          >
+            <option value="all">全部门店</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {storeFilter !== 'all' && (
+            <span className="text-sm text-brand-taupe flex items-center gap-1">
+              <Building2 className="w-4 h-4" />
+              当前查看单门店统计
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">

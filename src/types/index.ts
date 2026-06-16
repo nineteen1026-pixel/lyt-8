@@ -2,8 +2,19 @@ export type RoomType = 'standard' | 'deluxe' | 'suite' | 'family';
 export type BedType = 'single' | 'double' | 'twin' | 'king';
 export type RoomStatus = 'active' | 'maintenance' | 'inactive';
 
+export interface Store {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Room {
   id: string;
+  storeId: string;
   roomNumber: string;
   name: string;
   type: RoomType;

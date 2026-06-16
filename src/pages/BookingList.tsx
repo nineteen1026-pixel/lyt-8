@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Booking, BookingStatus, GuestProfile, RoomType } from '@/types';
 import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone } from '@/types';
@@ -14,17 +14,21 @@ export default function BookingList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
-    bookings,
+    stores,
     rooms,
     addBooking,
     updateBooking,
     cancelBooking,
     getRoomById,
-    updateBookingStatus,
+    getRoomsByStore,
+    getBookingsByStore,
     getGuestProfiles,
+    getStoreById,
+    updateBookingStatus,
   } = useAppStore();
 
   const [search, setSearch] = useState('');
+  const [storeFilter, setStoreFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
   const [roomTypeFilter, setRoomTypeFilter] = useState<RoomType | 'all'>('all');
   const [roomIdFilter, setRoomIdFilter] = useState<string>('all');
@@ -43,24 +47,29 @@ export default function BookingList() {
     }
   }, [searchParams]);
 
+  const filteredRooms = useMemo(() => {
+    let list = getRoomsByStore(storeFilter);
+    if (roomTypeFilter !== 'all') {
+      list = list.filter((r) => r.type === roomTypeFilter);
+    }
+    return list;
+  }, [storeFilter, roomTypeFilter, getRoomsByStore, rooms]);
+
+  const storeBookings = useMemo(() => getBookingsByStore(storeFilter), [storeFilter, getBookingsByStore]);
+
   const getRoomNumber = (roomId: string) => {
     const room = getRoomById(roomId);
     return room ? `${room.roomNumber} ${room.name}` : '未知房间';
   };
 
   const guestProfileMap = useMemo(() => {
-    const profiles = getGuestProfiles();
+    const profiles = getGuestProfiles(storeFilter);
     const map = new Map<string, GuestProfile>();
     profiles.forEach((p) => map.set(p.guestPhone, p));
     return map;
-  }, [getGuestProfiles, bookings]);
+  }, [getGuestProfiles, storeBookings, storeFilter]);
 
-  const filteredRooms = useMemo(() => {
-    if (roomTypeFilter === 'all') return rooms;
-    return rooms.filter((r) => r.type === roomTypeFilter);
-  }, [rooms, roomTypeFilter]);
-
-  const filteredBookings = bookings
+  const filteredBookings = storeBookings
     .filter((b) => {
       if (statusFilter !== 'all' && b.status !== statusFilter) return false;
       if (roomTypeFilter !== 'all') {
@@ -86,6 +95,11 @@ export default function BookingList() {
 
   const handleRoomTypeChange = (value: RoomType | 'all') => {
     setRoomTypeFilter(value);
+    setRoomIdFilter('all');
+  };
+
+  const handleStoreChange = (value: string) => {
+    setStoreFilter(value);
     setRoomIdFilter('all');
   };
 
@@ -160,6 +174,18 @@ export default function BookingList() {
             <Filter className="w-4 h-4 text-brand-taupe" />
             <select
               className="input-base !w-auto"
+              value={storeFilter}
+              onChange={(e) => handleStoreChange(e.target.value)}
+            >
+              <option value="all">全部门店</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="input-base !w-auto"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as BookingStatus | 'all')}
             >
@@ -221,7 +247,7 @@ export default function BookingList() {
                     消费频次 / 复购提醒
                   </th>
                   <th className="text-left text-sm font-medium text-brand-taupe px-5 py-3">
-                    房间
+                    门店 / 房间
                   </th>
                   <th className="text-left text-sm font-medium text-brand-taupe px-5 py-3">
                     入住日期
@@ -243,6 +269,7 @@ export default function BookingList() {
               <tbody>
                 {filteredBookings.map((b, idx) => {
                   const room = getRoomById(b.roomId);
+                  const store = room ? getStoreById(room.storeId) : null;
                   const nights = calculateNights(b.checkIn, b.checkOut);
                   const guestProfile = guestProfileMap.get(b.guestPhone);
 
@@ -300,6 +327,12 @@ export default function BookingList() {
                         )}
                       </td>
                       <td className="px-5 py-4">
+                        {store && (
+                          <div className="text-xs text-brand-taupe flex items-center gap-1 mb-0.5">
+                            <Building2 className="w-3 h-3" />
+                            {store.name}
+                          </div>
+                        )}
                         <div className="font-medium text-brand-brown">
                           {room?.roomNumber} {room?.name}
                         </div>

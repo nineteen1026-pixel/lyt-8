@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Pencil, Trash2, Users, BedDouble, Wifi, DollarSign } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Pencil, Trash2, Users, BedDouble, Wifi, DollarSign, Building2, Filter } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Room } from '@/types';
 import { RoomTypeLabels, BedTypeLabels, RoomStatusLabels } from '@/types';
@@ -8,11 +8,14 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import RoomForm from './RoomForm';
 
 export default function RoomList() {
-  const { rooms, addRoom, updateRoom, deleteRoom, getBookingsByRoom } = useAppStore();
+  const { stores, getRoomsByStore, addRoom, updateRoom, deleteRoom, getBookingsByRoom, getStoreById } = useAppStore();
   const [formOpen, setFormOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [storeFilter, setStoreFilter] = useState<string>('all');
+
+  const rooms = useMemo(() => getRoomsByStore(storeFilter), [getRoomsByStore, storeFilter]);
 
   const handleAdd = () => {
     setEditingRoom(null);
@@ -65,6 +68,11 @@ export default function RoomList() {
     }
   };
 
+  const storeName = (storeId: string) => {
+    const store = getStoreById(storeId);
+    return store?.name || '未知门店';
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
@@ -76,6 +84,27 @@ export default function RoomList() {
           <Plus className="w-4 h-4" />
           新增房间
         </button>
+      </div>
+
+      <div className="card-base p-4 mb-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="w-4 h-4 text-brand-taupe" />
+          <select
+            className="input-base !w-auto"
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+          >
+            <option value="all">全部门店</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <span className="text-sm text-brand-taupe">
+            共 {rooms.length} 间房间
+          </span>
+        </div>
       </div>
 
       {rooms.length === 0 ? (
@@ -110,6 +139,10 @@ export default function RoomList() {
                       {getStatusBadge(room.status)}
                     </div>
                     <h3 className="text-lg font-medium text-gray-800">{room.name}</h3>
+                    <div className="flex items-center gap-1 text-xs text-brand-taupe mt-1">
+                      <Building2 className="w-3 h-3" />
+                      {storeName(room.storeId)}
+                    </div>
                   </div>
                   <div className="flex gap-1">
                     <button

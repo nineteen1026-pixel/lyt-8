@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BedDouble,
@@ -13,6 +14,8 @@ import {
   AlertCircle,
   Sparkles,
   Wrench,
+  Building2,
+  Filter,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import Badge from '@/components/Badge';
@@ -21,17 +24,39 @@ import { todayStr, isSameDayStr, formatDateDisplay } from '@/utils/date';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { getTodayStats, getRevenueStats, bookings, rooms, getPendingTasks, cleaningTasks, getRoomById } = useAppStore();
-  const stats = getTodayStats();
-  const revenueStats = getRevenueStats();
-  const pendingTasks = getPendingTasks();
+  const {
+    stores,
+    getTodayStats,
+    getRevenueStats,
+    getBookingsByStore,
+    getRoomsByStore,
+    getPendingTasks,
+    getCleaningTasksByStore,
+    getRoomById,
+  } = useAppStore();
+
+  const [storeFilter, setStoreFilter] = useState<string>('all');
+
+  const stats = getTodayStats(storeFilter);
+  const revenueStats = getRevenueStats(storeFilter);
+  const pendingTasks = getPendingTasks(storeFilter);
+  const bookings = getBookingsByStore(storeFilter);
+  const rooms = getRoomsByStore(storeFilter);
+  const cleaningTasks = getCleaningTasksByStore(storeFilter);
   const today = todayStr();
 
-  const todayCheckIns = bookings.filter(
-    (b) => b.status !== 'cancelled' && isSameDayStr(b.checkIn, today)
+  const todayCheckIns = useMemo(
+    () => bookings.filter(
+      (b) => b.status !== 'cancelled' && isSameDayStr(b.checkIn, today)
+    ),
+    [bookings, today]
   );
-  const todayCheckOuts = bookings.filter(
-    (b) => b.status !== 'cancelled' && isSameDayStr(b.checkOut, today)
+
+  const todayCheckOuts = useMemo(
+    () => bookings.filter(
+      (b) => b.status !== 'cancelled' && isSameDayStr(b.checkOut, today)
+    ),
+    [bookings, today]
   );
 
   const getRoomNumber = (roomId: string) => {
@@ -91,6 +116,30 @@ export default function Dashboard() {
         <p className="text-brand-taupe mt-1">
           {formatDateDisplay(today)} · 欢迎回来，今天也要元气满满哦~
         </p>
+      </div>
+
+      <div className="card-base p-4 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="w-4 h-4 text-brand-taupe" />
+          <select
+            className="input-base !w-auto"
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+          >
+            <option value="all">全部门店</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {storeFilter !== 'all' && (
+            <span className="text-sm text-brand-taupe flex items-center gap-1">
+              <Building2 className="w-4 h-4" />
+              当前查看单门店数据
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
@@ -417,7 +466,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="card-base p-6">
+      <div className="card-base p-6 mt-5">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-display text-lg font-semibold text-brand-brown flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-rose-500" />

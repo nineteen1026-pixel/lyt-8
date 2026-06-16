@@ -8,10 +8,12 @@ import {
   BarChart3,
   Users,
   Sparkles,
+  Building2,
 } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: '仪表盘', icon: LayoutDashboard },
+  { path: '/stores', label: '门店管理', icon: Building2 },
   { path: '/rooms', label: '房间管理', icon: BedDouble },
   { path: '/calendar', label: '日历视图', icon: CalendarDays },
   { path: '/bookings', label: '预订管理', icon: ClipboardList },

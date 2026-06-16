@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Booking } from '@/types';
 import { BookingStatusLabels, normalizePhone } from '@/types';
 import Modal from '@/components/Modal';
 import { useAppStore } from '@/store/useAppStore';
 import { calculateNights, todayStr } from '@/utils/date';
 import { addDays, format } from 'date-fns';
+import { Building2 } from 'lucide-react';
 
 interface BookingFormProps {
   open: boolean;
@@ -28,7 +29,7 @@ export default function BookingForm({
   prefillCheckIn,
   prefillCheckOut,
 }: BookingFormProps) {
-  const { rooms, isRoomAvailable, getRoomById } = useAppStore();
+  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById } = useAppStore();
   const activeRooms = rooms.filter((r) => r.status === 'active');
 
   const [formData, setFormData] = useState({
@@ -44,11 +45,19 @@ export default function BookingForm({
     totalPrice: 0,
   });
 
+  const [storeFilter, setStoreFilter] = useState<string>('all');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const roomsByStore = useMemo(() => {
+    if (storeFilter === 'all') return activeRooms;
+    return activeRooms.filter((r) => r.storeId === storeFilter);
+  }, [activeRooms, storeFilter]);
+
   useEffect(() => {
     if (booking) {
+      const room = getRoomById(booking.roomId);
+      if (room) setStoreFilter(room.storeId);
       setFormData({
         roomId: booking.roomId,
         guestName: booking.guestName,
@@ -62,8 +71,13 @@ export default function BookingForm({
         totalPrice: booking.totalPrice,
       });
     } else {
+      const defaultRoomId = prefillRoomId || (roomsByStore[0]?.id || activeRooms[0]?.id || '');
+      if (prefillRoomId) {
+        const room = getRoomById(prefillRoomId);
+        if (room) setStoreFilter(room.storeId);
+      }
       setFormData({
-        roomId: prefillRoomId || (activeRooms[0]?.id || ''),
+        roomId: defaultRoomId,
         guestName: '',
         guestPhone: '',
         guestIdCard: '',
@@ -80,6 +94,17 @@ export default function BookingForm({
   }, [booking, prefillRoomId, prefillCheckIn, prefillCheckOut, open]);
 
   useEffect(() => {
+    if (!booking && !prefillRoomId && roomsByStore.length > 0 && storeFilter !== 'all') {
+      setFormData((prev) => ({
+        ...prev,
+        roomId: prev.roomId && activeRooms.find(r => r.id === prev.roomId && r.storeId === storeFilter)
+          ? prev.roomId
+          : roomsByStore[0]?.id || '',
+      }));
+    }
+  }, [storeFilter, roomsByStore, booking, prefillRoomId, activeRooms]);
+
+  useEffect(() => {
     const room = getRoomById(formData.roomId);
     const nights = calculateNights(formData.checkIn, formData.checkOut);
     if (room && nights > 0) {
@@ -89,6 +114,7 @@ export default function BookingForm({
 
   const nights = calculateNights(formData.checkIn, formData.checkOut);
   const selectedRoom = getRoomById(formData.roomId);
+  const selectedStore = selectedRoom ? getStoreById(selectedRoom.storeId) : null;
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -152,8 +178,32 @@ export default function BookingForm({
           </div>
         )}
 
+        {!booking && (
+          <div>
+            <label className="label-base">筛选门店</label>
+            <select
+              className="input-base"
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value)}
+            >
+              <option value="all">全部门店</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div>
           <label className="label-base">选择房间 *</label>
+          {selectedStore && (
+            <div className="text-xs text-brand-taupe mb-1.5 flex items-center gap-1">
+              <Building2 className="w-3 h-3" />
+              {selectedStore.name}
+            </div>
+          )}
           <select
             className={`input-base ${errors.roomId ? 'border-red-400' : ''}`}
             value={formData.roomId}
@@ -161,11 +211,14 @@ export default function BookingForm({
             disabled={!!booking}
           >
             <option value="">请选择房间</option>
-            {activeRooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.roomNumber} - {r.name} (¥{r.price}/晚)
-              </option>
-            ))}
+            {roomsByStore.map((r) => {
+              const s = getStoreById(r.storeId);
+              return (
+                <option key={r.id} value={r.id}>
+                  {s ? `[${s.name}] ` : ''}{r.roomNumber} - {r.name} (¥{r.price}/晚)
+                </option>
+              );
+            })}
           </select>
           {errors.roomId && <p className="text-red-500 text-xs mt-1">{errors.roomId}</p>}
         </div>

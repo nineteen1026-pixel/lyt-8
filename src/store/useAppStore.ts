@@ -10,13 +10,17 @@ import type {
   RepurchaseReminder,
   CleaningTask,
   CleaningTaskStatus,
+  Store,
 } from '@/types';
 import { normalizePhone } from '@/types';
 import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
 import { differenceInDays, parseISO } from 'date-fns';
-import { getInitialRooms, getInitialBookings } from '@/utils/mockData';
+import { getInitialStores, getInitialRooms, getInitialBookings } from '@/utils/mockData';
+
+type StoreIdFilter = string | 'all';
 
 interface AppState {
+  stores: Store[];
   rooms: Room[];
   bookings: Booking[];
   cleaningTasks: CleaningTask[];
@@ -24,20 +28,27 @@ interface AppState {
 
   initializeData: () => void;
 
+  addStore: (store: Omit<Store, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateStore: (id: string, store: Partial<Store>) => void;
+  deleteStore: (id: string) => boolean;
+  getStoreById: (id: string) => Store | undefined;
+
   addRoom: (room: Omit<Room, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateRoom: (id: string, room: Partial<Room>) => void;
   deleteRoom: (id: string) => boolean;
   getRoomById: (id: string) => Room | undefined;
+  getRoomsByStore: (storeId: StoreIdFilter) => Room[];
 
   addBooking: (booking: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>) => boolean;
   updateBooking: (id: string, booking: Partial<Booking>) => boolean;
   cancelBooking: (id: string, reason: string) => void;
   updateBookingStatus: (id: string, status: BookingStatus) => void;
   getBookingById: (id: string) => Booking | undefined;
+  getBookingsByStore: (storeId: StoreIdFilter) => Booking[];
 
   getBookingsByRoom: (roomId: string) => Booking[];
-  getBookingsByDate: (date: string) => Booking[];
-  getActiveBookingsByDate: (date: string) => Booking[];
+  getBookingsByDate: (date: string, storeId?: StoreIdFilter) => Booking[];
+  getActiveBookingsByDate: (date: string, storeId?: StoreIdFilter) => Booking[];
 
   isRoomAvailable: (
     roomId: string,
@@ -45,9 +56,9 @@ interface AppState {
     checkOut: string,
     excludeBookingId?: string
   ) => boolean;
-  getAvailableRooms: (checkIn: string, checkOut: string) => Room[];
+  getAvailableRooms: (checkIn: string, checkOut: string, storeId?: StoreIdFilter) => Room[];
 
-  getTodayStats: () => {
+  getTodayStats: (storeId?: StoreIdFilter) => {
     totalRooms: number;
     occupiedToday: number;
     availableToday: number;
@@ -55,9 +66,9 @@ interface AppState {
     checkOutToday: number;
   };
 
-  getDailyReport: (startDate: string, endDate: string) => DailyReportItem[];
-  getMonthlyReport: (startMonth: string, endMonth: string) => MonthlyReportItem[];
-  getRevenueStats: () => {
+  getDailyReport: (startDate: string, endDate: string, storeId?: StoreIdFilter) => DailyReportItem[];
+  getMonthlyReport: (startMonth: string, endMonth: string, storeId?: StoreIdFilter) => MonthlyReportItem[];
+  getRevenueStats: (storeId?: StoreIdFilter) => {
     todayRevenue: number;
     monthRevenue: number;
     lastMonthRevenue: number;
@@ -67,17 +78,18 @@ interface AppState {
     monthBookings: number;
   };
 
-  getGuestProfiles: () => GuestProfile[];
-  getGuestProfileByPhone: (phone: string) => GuestProfile | undefined;
-  getRepurchaseReminders: () => GuestProfile[];
+  getGuestProfiles: (storeId?: StoreIdFilter) => GuestProfile[];
+  getGuestProfileByPhone: (phone: string, storeId?: StoreIdFilter) => GuestProfile | undefined;
+  getRepurchaseReminders: (storeId?: StoreIdFilter) => GuestProfile[];
 
   addCleaningTask: (task: Omit<CleaningTask, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateCleaningTask: (id: string, task: Partial<CleaningTask>) => void;
   updateCleaningTaskStatus: (id: string, status: CleaningTaskStatus) => void;
   deleteCleaningTask: (id: string) => void;
   getCleaningTasksByRoom: (roomId: string) => CleaningTask[];
-  getCleaningTasksByDate: (date: string) => CleaningTask[];
-  getPendingTasks: () => {
+  getCleaningTasksByDate: (date: string, storeId?: StoreIdFilter) => CleaningTask[];
+  getCleaningTasksByStore: (storeId: StoreIdFilter) => CleaningTask[];
+  getPendingTasks: (storeId?: StoreIdFilter) => {
     pendingCleaning: number;
     todayCheckIns: number;
     todayCheckOuts: number;
@@ -89,6 +101,7 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      stores: [],
       rooms: [],
       bookings: [],
       cleaningTasks: [],
@@ -110,13 +123,50 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        const initialRooms = getInitialRooms();
+        const initialStores = getInitialStores();
+        const initialRooms = getInitialRooms(initialStores);
         const initialBookings = getInitialBookings(initialRooms);
         set({
+          stores: initialStores,
           rooms: initialRooms,
           bookings: initialBookings,
           initialized: true,
         });
+      },
+
+      addStore: (store) => {
+        const now = new Date().toISOString();
+        const newStore: Store = {
+          ...store,
+          id: generateId(),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({ stores: [...state.stores, newStore] }));
+      },
+
+      updateStore: (id, store) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          stores: state.stores.map((s) =>
+            s.id === id ? { ...s, ...store, updatedAt: now } : s
+          ),
+        }));
+      },
+
+      deleteStore: (id) => {
+        const { rooms } = get();
+        const hasRooms = rooms.some((r) => r.storeId === id);
+        if (hasRooms) return false;
+
+        set((state) => ({
+          stores: state.stores.filter((s) => s.id !== id),
+        }));
+        return true;
+      },
+
+      getStoreById: (id) => {
+        return get().stores.find((s) => s.id === id);
       },
 
       addRoom: (room) => {
@@ -157,6 +207,12 @@ export const useAppStore = create<AppState>()(
 
       getRoomById: (id) => {
         return get().rooms.find((r) => r.id === id);
+      },
+
+      getRoomsByStore: (storeId) => {
+        const { rooms } = get();
+        if (storeId === 'all') return rooms;
+        return rooms.filter((r) => r.storeId === storeId);
       },
 
       addBooking: (booking) => {
@@ -257,20 +313,31 @@ export const useAppStore = create<AppState>()(
         return get().bookings.find((b) => b.id === id);
       },
 
+      getBookingsByStore: (storeId) => {
+        const { bookings, getRoomsByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const roomIds = new Set(rooms.map((r) => r.id));
+        return bookings.filter((b) => roomIds.has(b.roomId));
+      },
+
       getBookingsByRoom: (roomId) => {
         return get().bookings.filter((b) => b.roomId === roomId);
       },
 
-      getBookingsByDate: (date) => {
-        return get().bookings.filter(
+      getBookingsByDate: (date, storeId = 'all') => {
+        const { getBookingsByStore } = get();
+        const bookings = getBookingsByStore(storeId);
+        return bookings.filter(
           (b) =>
             b.status !== 'cancelled' &&
             isDateOverlap(b.checkIn, b.checkOut, date, date)
         );
       },
 
-      getActiveBookingsByDate: (date) => {
-        return get().bookings.filter(
+      getActiveBookingsByDate: (date, storeId = 'all') => {
+        const { getBookingsByStore } = get();
+        const bookings = getBookingsByStore(storeId);
+        return bookings.filter(
           (b) =>
             (b.status === 'confirmed' || b.status === 'checked-in') &&
             isDateOverlap(b.checkIn, b.checkOut, date, date)
@@ -291,15 +358,18 @@ export const useAppStore = create<AppState>()(
         );
       },
 
-      getAvailableRooms: (checkIn, checkOut) => {
-        const { rooms, isRoomAvailable } = get();
+      getAvailableRooms: (checkIn, checkOut, storeId = 'all') => {
+        const { getRoomsByStore, isRoomAvailable } = get();
+        const rooms = getRoomsByStore(storeId);
         return rooms.filter(
           (r) => r.status === 'active' && isRoomAvailable(r.id, checkIn, checkOut)
         );
       },
 
-      getTodayStats: () => {
-        const { rooms, bookings } = get();
+      getTodayStats: (storeId = 'all') => {
+        const { getRoomsByStore, getBookingsByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const bookings = getBookingsByStore(storeId);
         const today = todayStr();
 
         const totalRooms = rooms.filter((r) => r.status === 'active').length;
@@ -328,8 +398,10 @@ export const useAppStore = create<AppState>()(
         };
       },
 
-      getDailyReport: (startDate, endDate) => {
-        const { rooms, bookings } = get();
+      getDailyReport: (startDate, endDate, storeId = 'all') => {
+        const { getRoomsByStore, getBookingsByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const bookings = getBookingsByStore(storeId);
         const days = getDaysInRange(startDate, endDate);
         const totalRooms = rooms.filter((r) => r.status === 'active').length;
         const validBookings = bookings.filter((b) => b.status !== 'cancelled');
@@ -377,8 +449,10 @@ export const useAppStore = create<AppState>()(
         });
       },
 
-      getMonthlyReport: (startMonth, endMonth) => {
-        const { rooms, bookings } = get();
+      getMonthlyReport: (startMonth, endMonth, storeId = 'all') => {
+        const { getRoomsByStore, getBookingsByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const bookings = getBookingsByStore(storeId);
         const months = getMonthsInRange(
           startOfMonthStr(startMonth + '-01'),
           endOfMonthStr(endMonth + '-01')
@@ -434,23 +508,24 @@ export const useAppStore = create<AppState>()(
         });
       },
 
-      getRevenueStats: () => {
-        const { getDailyReport, getMonthlyReport, bookings } = get();
+      getRevenueStats: (storeId = 'all') => {
+        const { getDailyReport, getMonthlyReport, getBookingsByStore } = get();
+        const bookings = getBookingsByStore(storeId);
         const today = todayStr();
         const thisMonth = getMonthKey(today);
         const lastMonthDate = new Date();
         lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
         const lastMonth = getMonthKey(lastMonthDate);
 
-        const dailyReport = getDailyReport(today, today);
+        const dailyReport = getDailyReport(today, today, storeId);
         const todayRevenue = dailyReport[0]?.revenue || 0;
 
-        const monthlyReport = getMonthlyReport(thisMonth, thisMonth);
+        const monthlyReport = getMonthlyReport(thisMonth, thisMonth, storeId);
         const monthRevenue = monthlyReport[0]?.revenue || 0;
         const monthOccupancyRate = monthlyReport[0]?.avgOccupancyRate || 0;
         const monthBookings = monthlyReport[0]?.totalBookings || 0;
 
-        const lastMonthReport = getMonthlyReport(lastMonth, lastMonth);
+        const lastMonthReport = getMonthlyReport(lastMonth, lastMonth, storeId);
         const lastMonthRevenue = lastMonthReport[0]?.revenue || 0;
         const lastMonthOccupancyRate =
           lastMonthReport[0]?.avgOccupancyRate || 0;
@@ -470,8 +545,9 @@ export const useAppStore = create<AppState>()(
         };
       },
 
-      getGuestProfiles: () => {
-        const { bookings } = get();
+      getGuestProfiles: (storeId = 'all') => {
+        const { getBookingsByStore } = get();
+        const bookings = getBookingsByStore(storeId);
         const today = todayStr();
         const phoneMap = new Map<string, Booking[]>();
 
@@ -580,14 +656,14 @@ export const useAppStore = create<AppState>()(
         return profiles.sort((a, b) => b.validBookingCount - a.validBookingCount);
       },
 
-      getGuestProfileByPhone: (phone) => {
+      getGuestProfileByPhone: (phone, storeId = 'all') => {
         const normalized = normalizePhone(phone);
-        const profiles = get().getGuestProfiles();
+        const profiles = get().getGuestProfiles(storeId);
         return profiles.find((p) => p.guestPhone === normalized);
       },
 
-      getRepurchaseReminders: () => {
-        const profiles = get().getGuestProfiles();
+      getRepurchaseReminders: (storeId = 'all') => {
+        const profiles = get().getGuestProfiles(storeId);
         return profiles.filter(
           (p) =>
             p.repurchaseReminder &&
@@ -636,12 +712,24 @@ export const useAppStore = create<AppState>()(
         return get().cleaningTasks.filter((t) => t.roomId === roomId);
       },
 
-      getCleaningTasksByDate: (date) => {
-        return get().cleaningTasks.filter((t) => t.scheduledDate === date);
+      getCleaningTasksByDate: (date, storeId = 'all') => {
+        const { getCleaningTasksByStore } = get();
+        const tasks = getCleaningTasksByStore(storeId);
+        return tasks.filter((t) => t.scheduledDate === date);
       },
 
-      getPendingTasks: () => {
-        const { rooms, bookings, cleaningTasks } = get();
+      getCleaningTasksByStore: (storeId) => {
+        const { cleaningTasks, getRoomsByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const roomIds = new Set(rooms.map((r) => r.id));
+        return cleaningTasks.filter((t) => roomIds.has(t.roomId));
+      },
+
+      getPendingTasks: (storeId = 'all') => {
+        const { getRoomsByStore, getBookingsByStore, getCleaningTasksByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const bookings = getBookingsByStore(storeId);
+        const cleaningTasks = getCleaningTasksByStore(storeId);
         const today = todayStr();
 
         const pendingCleaning = cleaningTasks.filter(

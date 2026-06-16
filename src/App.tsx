@@ -9,6 +9,7 @@ import Reports from '@/pages/Reports';
 import GuestList from '@/pages/GuestList';
 import GuestDetail from '@/pages/GuestDetail';
 import CleaningTaskList from '@/pages/CleaningTaskList';
+import StoreList from '@/pages/StoreList';
 import { useAppStore } from '@/store/useAppStore';
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/stores" element={<StoreList />} />
           <Route path="/rooms" element={<RoomList />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/bookings" element={<BookingList />} />

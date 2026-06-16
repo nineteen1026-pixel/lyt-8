@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Plus,
   Sparkles,
@@ -8,6 +8,7 @@ import {
   Play,
   CheckCircle2,
   BedDouble,
+  Building2,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { CleaningTask, CleaningTaskStatus } from '@/types';
@@ -18,15 +19,20 @@ import { formatDateDisplay } from '@/utils/date';
 
 export default function CleaningTaskList() {
   const {
+    stores,
     cleaningTasks,
     rooms,
     addCleaningTask,
     updateCleaningTaskStatus,
     deleteCleaningTask,
     getRoomById,
+    getRoomsByStore,
+    getCleaningTasksByStore,
+    getStoreById,
   } = useAppStore();
 
   const [search, setSearch] = useState('');
+  const [storeFilter, setStoreFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<CleaningTaskStatus | 'all'>('all');
   const [deleteTarget, setDeleteTarget] = useState<CleaningTask | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -34,9 +40,9 @@ export default function CleaningTaskList() {
   const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTaskNotes, setNewTaskNotes] = useState('');
 
-  const activeRooms = rooms.filter((r) => r.status === 'active');
+  const activeRooms = useMemo(() => getRoomsByStore(storeFilter).filter((r) => r.status === 'active'), [storeFilter, getRoomsByStore]);
 
-  const filteredTasks = cleaningTasks
+  const filteredTasks = useMemo(() => getCleaningTasksByStore(storeFilter), [storeFilter, getCleaningTasksByStore])
     .filter((t) => {
       if (statusFilter !== 'all' && t.status !== statusFilter) return false;
       if (search) {
@@ -62,6 +68,11 @@ export default function CleaningTaskList() {
       };
       return statusOrder[a.status] - statusOrder[b.status];
     });
+
+  const allTasksByStore = useMemo(() => getCleaningTasksByStore(storeFilter), [storeFilter, getCleaningTasksByStore]);
+  const pendingCount = allTasksByStore.filter((t) => t.status === 'pending').length;
+  const inProgressCount = allTasksByStore.filter((t) => t.status === 'in-progress').length;
+  const completedCount = allTasksByStore.filter((t) => t.status === 'completed').length;
 
   const getRoomNumber = (roomId: string) => {
     const room = getRoomById(roomId);
@@ -100,10 +111,6 @@ export default function CleaningTaskList() {
     });
     setFormOpen(false);
   };
-
-  const pendingCount = cleaningTasks.filter((t) => t.status === 'pending').length;
-  const inProgressCount = cleaningTasks.filter((t) => t.status === 'in-progress').length;
-  const completedCount = cleaningTasks.filter((t) => t.status === 'completed').length;
 
   return (
     <div className="animate-fade-in">
@@ -162,6 +169,18 @@ export default function CleaningTaskList() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-brand-taupe" />
+            <select
+              className="input-base !w-auto"
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value)}
+            >
+              <option value="all">全部门店</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
             <select
               className="input-base !w-auto"
               value={statusFilter}
@@ -236,8 +255,10 @@ export default function CleaningTaskList() {
                             <div className="font-medium text-brand-brown">
                               {room?.roomNumber} {room?.name}
                             </div>
-                            <div className="text-xs text-brand-taupe">
-                              {room ? `¥${room.price}/晚` : ''}
+                            <div className="text-xs text-brand-taupe flex items-center gap-1">
+                              <Building2 className="w-3 h-3" />
+                              {room ? (getStoreById(room.storeId)?.name || '未知门店') : '-'}
+                              {room ? ` · ¥${room.price}/晚` : ''}
                             </div>
                           </div>
                         </div>

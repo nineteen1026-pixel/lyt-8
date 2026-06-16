@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, BedDouble } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, BedDouble, Building2, Filter } from 'lucide-react';
 import { format, getMonth, getYear, isToday, parseISO } from 'date-fns';
 import { useAppStore } from '@/store/useAppStore';
 import { getMonthMatrix, getWeekDays, formatMonth, formatDateDisplay, calculateNights } from '@/utils/date';
@@ -12,7 +12,15 @@ import BookingForm from './BookingForm';
 
 export default function CalendarView() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { rooms, getActiveBookingsByDate, getRoomById, addBooking } = useAppStore();
+  const {
+    stores,
+    getRoomsByStore,
+    getActiveBookingsByDate,
+    getRoomById,
+    addBooking,
+    getStoreById,
+  } = useAppStore();
+  const [storeFilter, setStoreFilter] = useState<string>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [bookingFormOpen, setBookingFormOpen] = useState(false);
@@ -45,8 +53,8 @@ export default function CalendarView() {
     setSearchParams({});
   };
 
-  const activeRooms = rooms.filter((r) => r.status === 'active');
-  const maintenanceRooms = rooms.filter((r) => r.status === 'maintenance');
+  const activeRooms = useMemo(() => getRoomsByStore(storeFilter).filter((r) => r.status === 'active'), [storeFilter, getRoomsByStore]);
+  const maintenanceRooms = useMemo(() => getRoomsByStore(storeFilter).filter((r) => r.status === 'maintenance'), [storeFilter, getRoomsByStore]);
   const year = getYear(currentDate);
   const month = getMonth(currentDate);
   const weeks = useMemo(() => getMonthMatrix(year, month), [year, month]);
@@ -54,7 +62,7 @@ export default function CalendarView() {
 
   const getDayBookings = (date: Date): Booking[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return getActiveBookingsByDate(dateStr);
+    return getActiveBookingsByDate(dateStr, storeFilter);
   };
 
   const getDayStatus = (date: Date) => {
@@ -123,7 +131,7 @@ export default function CalendarView() {
     return addBooking(data);
   };
 
-  const selectedDateBookings = selectedDate ? getActiveBookingsByDate(selectedDate) : [];
+  const selectedDateBookings = selectedDate ? getActiveBookingsByDate(selectedDate, storeFilter) : [];
 
   return (
     <div className="animate-fade-in">
@@ -143,6 +151,30 @@ export default function CalendarView() {
           <Plus className="w-4 h-4" />
           新增预订
         </button>
+      </div>
+
+      <div className="card-base p-4 mb-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="w-4 h-4 text-brand-taupe" />
+          <select
+            className="input-base !w-auto"
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+          >
+            <option value="all">全部门店</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {storeFilter !== 'all' && (
+            <span className="text-sm text-brand-taupe flex items-center gap-1">
+              <Building2 className="w-4 h-4" />
+              当前查看单门店
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="card-base p-6">
@@ -327,8 +359,9 @@ export default function CalendarView() {
                           </div>
                           <div>
                             <div className="font-medium text-brand-brown">{room.name}</div>
-                            <div className="text-xs text-brand-taupe">
-                              {RoomTypeLabels[room.type]}
+                            <div className="text-xs text-brand-taupe flex items-center gap-1">
+                              <Building2 className="w-3 h-3" />
+                              {getStoreById(room.storeId)?.name || '未知门店'} · {RoomTypeLabels[room.type]}
                             </div>
                           </div>
                         </div>
@@ -369,8 +402,9 @@ export default function CalendarView() {
                           </div>
                           <div>
                             <div className="font-medium text-brand-brown">{room.name}</div>
-                            <div className="text-xs text-brand-taupe">
-                              {RoomTypeLabels[room.type]} · ¥{room.price}/晚
+                            <div className="text-xs text-brand-taupe flex items-center gap-1">
+                              <Building2 className="w-3 h-3" />
+                              {getStoreById(room.storeId)?.name} · {RoomTypeLabels[room.type]} · ¥{room.price}/晚
                             </div>
                           </div>
                         </div>

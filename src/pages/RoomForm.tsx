@@ -7,6 +7,7 @@ import {
   CommonFacilities,
 } from '@/types';
 import Modal from '@/components/Modal';
+import { useAppStore } from '@/store/useAppStore';
 
 interface RoomFormProps {
   open: boolean;
@@ -16,7 +17,9 @@ interface RoomFormProps {
 }
 
 export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProps) {
+  const { stores } = useAppStore();
   const [formData, setFormData] = useState({
+    storeId: '',
     roomNumber: '',
     name: '',
     type: 'standard' as RoomType,
@@ -33,6 +36,7 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
   useEffect(() => {
     if (room) {
       setFormData({
+        storeId: room.storeId,
         roomNumber: room.roomNumber,
         name: room.name,
         type: room.type,
@@ -45,6 +49,7 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
       });
     } else {
       setFormData({
+        storeId: stores[0]?.id || '',
         roomNumber: '',
         name: '',
         type: 'standard',
@@ -57,10 +62,11 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
       });
     }
     setErrors({});
-  }, [room, open]);
+  }, [room, open, stores]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
+    if (!formData.storeId) newErrors.storeId = '请选择所属门店';
     if (!formData.roomNumber.trim()) newErrors.roomNumber = '请输入房间号';
     if (!formData.name.trim()) newErrors.name = '请输入房间名称';
     if (formData.price <= 0) newErrors.price = '请输入有效价格';
@@ -93,6 +99,23 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label className="label-base">所属门店 *</label>
+          <select
+            className={`input-base ${errors.storeId ? 'border-red-400' : ''}`}
+            value={formData.storeId}
+            onChange={(e) => setFormData({ ...formData, storeId: e.target.value })}
+          >
+            <option value="">请选择门店</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {errors.storeId && <p className="text-red-500 text-xs mt-1">{errors.storeId}</p>}
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label-base">房间号 *</label>

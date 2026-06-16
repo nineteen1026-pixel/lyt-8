@@ -1,13 +1,51 @@
-import type { Room, Booking } from '@/types';
+import type { Room, Booking, Store } from '@/types';
 import { normalizePhone } from '@/types';
 import { generateId, todayStr, calculateNights } from './date';
 import { addDays, format, subMonths, subDays } from 'date-fns';
 
-export function getInitialRooms(): Room[] {
+export function getInitialStores(): Store[] {
   const now = new Date().toISOString();
   return [
     {
       id: generateId(),
+      name: '云栖山居·总店',
+      address: '杭州市西湖区龙井路88号',
+      phone: '0571-88888888',
+      description: '位于西湖风景区内，环境清幽，依山傍水。',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      name: '听海小筑·海景店',
+      address: '舟山市普陀区朱家尖南沙路66号',
+      phone: '0580-66666666',
+      description: '面朝大海，春暖花开，独享一线海景资源。',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      name: '竹韵山庄·山景店',
+      address: '湖州市安吉县天荒坪镇竹海景区',
+      phone: '0572-77777777',
+      description: '万亩竹林环绕，远离尘嚣的世外桃源。',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+
+export function getInitialRooms(stores: Store[]): Room[] {
+  if (stores.length === 0) return [];
+  const now = new Date().toISOString();
+  const storeIds = stores.map((s) => s.id);
+  const [store1Id, store2Id, store3Id] = storeIds;
+
+  return [
+    {
+      id: generateId(),
+      storeId: store1Id,
       roomNumber: '101',
       name: '听雨阁',
       type: 'standard',
@@ -22,6 +60,7 @@ export function getInitialRooms(): Room[] {
     },
     {
       id: generateId(),
+      storeId: store1Id,
       roomNumber: '102',
       name: '观云轩',
       type: 'standard',
@@ -36,6 +75,7 @@ export function getInitialRooms(): Room[] {
     },
     {
       id: generateId(),
+      storeId: store1Id,
       roomNumber: '201',
       name: '揽月楼',
       type: 'deluxe',
@@ -50,7 +90,8 @@ export function getInitialRooms(): Room[] {
     },
     {
       id: generateId(),
-      roomNumber: '202',
+      storeId: store2Id,
+      roomNumber: '101',
       name: '望海居',
       type: 'deluxe',
       price: 528,
@@ -64,6 +105,37 @@ export function getInitialRooms(): Room[] {
     },
     {
       id: generateId(),
+      storeId: store2Id,
+      roomNumber: '102',
+      name: '听潮阁',
+      type: 'standard',
+      price: 328,
+      bedType: 'double',
+      capacity: 2,
+      facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '海景'],
+      description: '侧海景标准间，躺在床上就能听到海浪声。',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store2Id,
+      roomNumber: '201',
+      name: '观日台',
+      type: 'suite',
+      price: 988,
+      bedType: 'king',
+      capacity: 2,
+      facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '海景', '阳台', '保险箱', '咖啡机', '冰箱', '拖鞋'],
+      description: '顶级海景套房，独立起居室和卧室，超大观海阳台，尊享品质体验。',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store3Id,
       roomNumber: '301',
       name: '竹韵套房',
       type: 'suite',
@@ -78,6 +150,7 @@ export function getInitialRooms(): Room[] {
     },
     {
       id: generateId(),
+      storeId: store3Id,
       roomNumber: '302',
       name: '阖家欢',
       type: 'family',
@@ -86,6 +159,21 @@ export function getInitialRooms(): Room[] {
       capacity: 4,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '冰箱', '拖鞋'],
       description: '温馨家庭房，一张双人床+两张单人床，适合全家出行。',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store3Id,
+      roomNumber: '201',
+      name: '翠竹轩',
+      type: 'deluxe',
+      price: 458,
+      bedType: 'king',
+      capacity: 2,
+      facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '山景', '阳台'],
+      description: '竹林景观豪华房，推窗即见翠绿竹海。',
       status: 'active',
       createdAt: now,
       updatedAt: now,
@@ -124,7 +212,7 @@ function generateHistoricalBookings(rooms: Room[]): Booking[] {
       0
     ).getDate();
 
-    const bookingsThisMonth = Math.floor(Math.random() * 8) + 10;
+    const bookingsThisMonth = Math.floor(Math.random() * 12) + 15;
 
     for (let i = 0; i < bookingsThisMonth; i++) {
       const room = pickRandom(rooms);
@@ -214,14 +302,14 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
     },
     {
       id: generateId(),
-      roomId: rooms[2].id,
+      roomId: rooms[3].id,
       guestName: '王总',
       guestPhone: normalizePhone('13700137003'),
       guestIdCard: '310101198505069012',
       checkIn: format(addDays(today, 3), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 5), 'yyyy-MM-dd'),
       guests: 2,
-      totalPrice: 488 * 2,
+      totalPrice: 528 * 2,
       status: 'confirmed',
       notes: '商务出行，需要发票',
       createdAt: now,
@@ -229,13 +317,13 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
     },
     {
       id: generateId(),
-      roomId: rooms[3].id,
+      roomId: rooms[4].id,
       guestName: '陈小姐',
       guestPhone: normalizePhone('13600136004'),
       checkIn: format(addDays(today, 1), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 4), 'yyyy-MM-dd'),
       guests: 2,
-      totalPrice: 528 * 3,
+      totalPrice: 328 * 3,
       status: 'confirmed',
       notes: '蜜月旅行，希望房间有浪漫布置',
       createdAt: now,
@@ -243,7 +331,7 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
     },
     {
       id: generateId(),
-      roomId: rooms[5].id,
+      roomId: rooms[7].id,
       guestName: '赵先生一家',
       guestPhone: normalizePhone('13500135005'),
       checkIn: format(addDays(today, 7), 'yyyy-MM-dd'),
@@ -257,7 +345,7 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
     },
     {
       id: generateId(),
-      roomId: rooms[4].id,
+      roomId: rooms[6].id,
       guestName: '孙先生',
       guestPhone: normalizePhone('13400134006'),
       checkIn: format(addDays(today, -5), 'yyyy-MM-dd'),

@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Users,
   Filter,
+  Building2,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { GuestProfile, RepurchaseLevel } from '@/types';
@@ -22,13 +23,19 @@ type FilterType = 'all' | RepurchaseLevel;
 
 export default function GuestList() {
   const navigate = useNavigate();
-  const { getGuestProfiles, getRepurchaseReminders, bookings } = useAppStore();
+  const {
+    stores,
+    getGuestProfiles,
+    getRepurchaseReminders,
+    bookings,
+  } = useAppStore();
 
   const [search, setSearch] = useState('');
+  const [storeFilter, setStoreFilter] = useState<string>('all');
   const [filter, setFilter] = useState<FilterType>('all');
 
-  const allProfiles = useMemo(() => getGuestProfiles(), [getGuestProfiles, bookings]);
-  const reminders = useMemo(() => getRepurchaseReminders(), [getRepurchaseReminders, bookings]);
+  const allProfiles = useMemo(() => getGuestProfiles(storeFilter), [getGuestProfiles, bookings, storeFilter]);
+  const reminders = useMemo(() => getRepurchaseReminders(storeFilter), [getRepurchaseReminders, bookings, storeFilter]);
 
   const filteredProfiles = useMemo(() => {
     return allProfiles.filter((p) => {
@@ -155,6 +162,18 @@ export default function GuestList() {
           </div>
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-brand-taupe" />
+            <select
+              className="input-base !w-auto"
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value)}
+            >
+              <option value="all">全部门店</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
             <select
               className="input-base !w-auto"
               value={filter}
