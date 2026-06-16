@@ -7,6 +7,7 @@ import {
   Home,
   BarChart3,
   Users,
+  Sparkles,
 } from 'lucide-react';
 
 const navItems = [
@@ -14,6 +15,7 @@ const navItems = [
   { path: '/rooms', label: '房间管理', icon: BedDouble },
   { path: '/calendar', label: '日历视图', icon: CalendarDays },
   { path: '/bookings', label: '预订管理', icon: ClipboardList },
+  { path: '/cleaning-tasks', label: '保洁工单', icon: Sparkles },
   { path: '/guests', label: '客人档案', icon: Users },
   { path: '/reports', label: '经营报表', icon: BarChart3 },
 ];

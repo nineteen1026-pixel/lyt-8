@@ -10,18 +10,21 @@ import {
   DollarSign,
   TrendingUp,
   BarChart3,
+  AlertCircle,
+  Sparkles,
+  Wrench,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import Badge from '@/components/Badge';
 import { BookingStatusColors, BookingStatusLabels } from '@/types';
-import { todayStr, isSameDayStr, formatDateDisplay, getMonthKey } from '@/utils/date';
-import { format, parseISO } from 'date-fns';
+import { todayStr, isSameDayStr, formatDateDisplay } from '@/utils/date';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { getTodayStats, getRevenueStats, bookings, rooms, getMonthlyReport } = useAppStore();
+  const { getTodayStats, getRevenueStats, bookings, rooms, getPendingTasks, cleaningTasks, getRoomById } = useAppStore();
   const stats = getTodayStats();
   const revenueStats = getRevenueStats();
+  const pendingTasks = getPendingTasks();
   const today = todayStr();
 
   const todayCheckIns = bookings.filter(
@@ -73,6 +76,12 @@ export default function Dashboard() {
       icon: TrendingUp,
       gradient: 'from-emerald-500 to-teal-400',
     },
+    {
+      label: '待处理任务',
+      value: pendingTasks.total,
+      icon: AlertCircle,
+      gradient: 'from-rose-500 to-pink-500',
+    },
   ];
 
   return (
@@ -84,16 +93,21 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
         {statCards.map((card, idx) => {
           const Icon = card.icon;
           return (
             <div
               key={card.label}
-              className="relative overflow-hidden rounded-2xl p-4 text-white shadow-card animate-slide-up"
+              className="relative overflow-hidden rounded-2xl p-4 text-white shadow-card animate-slide-up cursor-pointer hover:-translate-y-0.5 transition-transform"
               style={{
                 background: `linear-gradient(135deg, var(--tw-gradient-stops))`,
                 animationDelay: `${idx * 80}ms`,
+              }}
+              onClick={() => {
+                if (card.label === '待处理任务') {
+                  navigate('/cleaning-tasks');
+                }
               }}
             >
               <div
@@ -401,6 +415,96 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="card-base p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="font-display text-lg font-semibold text-brand-brown flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-rose-500" />
+            待处理任务汇总
+          </h2>
+          <button
+            onClick={() => navigate('/cleaning-tasks')}
+            className="text-sm text-brand-brown hover:text-brand-brownLight flex items-center gap-1"
+          >
+            查看全部 <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span className="text-sm text-amber-700 font-medium">待保洁</span>
+            </div>
+            <div className="font-display text-3xl font-bold text-amber-600">
+              {pendingTasks.pendingCleaning}
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-brand-green/10 border border-brand-green/30">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarCheck className="w-4 h-4 text-brand-green" />
+              <span className="text-sm text-brand-green font-medium">今日入住</span>
+            </div>
+            <div className="font-display text-3xl font-bold text-brand-green">
+              {pendingTasks.todayCheckIns}
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-brand-orange/10 border border-brand-orange/30">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarX className="w-4 h-4 text-brand-orange" />
+              <span className="text-sm text-brand-orange font-medium">今日退房</span>
+            </div>
+            <div className="font-display text-3xl font-bold text-brand-orange">
+              {pendingTasks.todayCheckOuts}
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200">
+            <div className="flex items-center gap-2 mb-2">
+              <Wrench className="w-4 h-4 text-rose-600" />
+              <span className="text-sm text-rose-600 font-medium">维护中房间</span>
+            </div>
+            <div className="font-display text-3xl font-bold text-rose-600">
+              {pendingTasks.maintenanceRooms}
+            </div>
+          </div>
+        </div>
+
+        {cleaningTasks.filter((t) => t.status !== 'completed').length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-brand-brown mb-3">待处理保洁任务</h3>
+            <div className="space-y-2">
+              {cleaningTasks
+                .filter((t) => t.status !== 'completed')
+                .slice(0, 5)
+                .map((task) => {
+                  const room = getRoomById(task.roomId);
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-amber-50 border border-amber-200"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="w-4 h-4 text-amber-600" />
+                        <div>
+                          <div className="font-medium text-brand-brown">
+                            {room ? `${room.roomNumber} ${room.name}` : '未知房间'}
+                          </div>
+                          <div className="text-xs text-brand-taupe">
+                            {task.guestName ? `${task.guestName} 退房后保洁` : '定期保洁'}
+                            {task.notes ? ` · ${task.notes}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge variant={task.status === 'pending' ? 'warning' : 'info'}>
+                        {task.status === 'pending' ? '待处理' : '进行中'}
+                      </Badge>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

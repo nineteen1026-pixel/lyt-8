@@ -147,3 +147,30 @@ export function normalizePhone(phone: string): string {
 }
 
 export type ReportGranularity = 'day' | 'month';
+
+export type CleaningTaskStatus = 'pending' | 'in-progress' | 'completed';
+
+export interface CleaningTask {
+  id: string;
+  roomId: string;
+  bookingId?: string;
+  guestName?: string;
+  scheduledDate: string;
+  status: CleaningTaskStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
+export const CleaningTaskStatusLabels: Record<CleaningTaskStatus, string> = {
+  pending: '待处理',
+  'in-progress': '进行中',
+  completed: '已完成',
+};
+
+export const CleaningTaskStatusColors: Record<CleaningTaskStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  'in-progress': 'bg-blue-100 text-blue-700',
+  completed: 'bg-green-100 text-green-700',
+};

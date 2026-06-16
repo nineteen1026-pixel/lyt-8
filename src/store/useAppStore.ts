@@ -4,11 +4,12 @@ import type {
   Room,
   Booking,
   BookingStatus,
-  RoomStatus,
   DailyReportItem,
   MonthlyReportItem,
   GuestProfile,
   RepurchaseReminder,
+  CleaningTask,
+  CleaningTaskStatus,
 } from '@/types';
 import { normalizePhone } from '@/types';
 import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
@@ -18,6 +19,7 @@ import { getInitialRooms, getInitialBookings } from '@/utils/mockData';
 interface AppState {
   rooms: Room[];
   bookings: Booking[];
+  cleaningTasks: CleaningTask[];
   initialized: boolean;
 
   initializeData: () => void;
@@ -68,6 +70,20 @@ interface AppState {
   getGuestProfiles: () => GuestProfile[];
   getGuestProfileByPhone: (phone: string) => GuestProfile | undefined;
   getRepurchaseReminders: () => GuestProfile[];
+
+  addCleaningTask: (task: Omit<CleaningTask, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateCleaningTask: (id: string, task: Partial<CleaningTask>) => void;
+  updateCleaningTaskStatus: (id: string, status: CleaningTaskStatus) => void;
+  deleteCleaningTask: (id: string) => void;
+  getCleaningTasksByRoom: (roomId: string) => CleaningTask[];
+  getCleaningTasksByDate: (date: string) => CleaningTask[];
+  getPendingTasks: () => {
+    pendingCleaning: number;
+    todayCheckIns: number;
+    todayCheckOuts: number;
+    maintenanceRooms: number;
+    total: number;
+  };
 }
 
 export const useAppStore = create<AppState>()(
@@ -75,6 +91,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       rooms: [],
       bookings: [],
+      cleaningTasks: [],
       initialized: false,
 
       initializeData: () => {
@@ -205,11 +222,35 @@ export const useAppStore = create<AppState>()(
 
       updateBookingStatus: (id, status) => {
         const now = new Date().toISOString();
+        const booking = get().bookings.find((b) => b.id === id);
         set((state) => ({
           bookings: state.bookings.map((b) =>
             b.id === id ? { ...b, status, updatedAt: now } : b
           ),
         }));
+
+        if (status === 'checked-out' && booking) {
+          const today = todayStr();
+          const existingTask = get().cleaningTasks.find(
+            (t) => t.bookingId === booking.id && t.status !== 'completed'
+          );
+          if (!existingTask) {
+            const newTask: CleaningTask = {
+              id: generateId(),
+              roomId: booking.roomId,
+              bookingId: booking.id,
+              guestName: booking.guestName,
+              scheduledDate: today,
+              status: 'pending',
+              notes: '退房自动生成保洁任务',
+              createdAt: now,
+              updatedAt: now,
+            };
+            set((state) => ({
+              cleaningTasks: [...state.cleaningTasks, newTask],
+            }));
+          }
+        }
       },
 
       getBookingById: (id) => {
@@ -553,6 +594,85 @@ export const useAppStore = create<AppState>()(
             (p.repurchaseReminder.level === 'suggest' ||
               p.repurchaseReminder.level === 'churn-risk')
         );
+      },
+
+      addCleaningTask: (task) => {
+        const now = new Date().toISOString();
+        const newTask: CleaningTask = {
+          ...task,
+          id: generateId(),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({ cleaningTasks: [...state.cleaningTasks, newTask] }));
+      },
+
+      updateCleaningTask: (id, task) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          cleaningTasks: state.cleaningTasks.map((t) =>
+            t.id === id ? { ...t, ...task, updatedAt: now } : t
+          ),
+        }));
+      },
+
+      updateCleaningTaskStatus: (id, status) => {
+        const now = new Date().toISOString();
+        const completedAt = status === 'completed' ? now : undefined;
+        set((state) => ({
+          cleaningTasks: state.cleaningTasks.map((t) =>
+            t.id === id ? { ...t, status, updatedAt: now, completedAt } : t
+          ),
+        }));
+      },
+
+      deleteCleaningTask: (id) => {
+        set((state) => ({
+          cleaningTasks: state.cleaningTasks.filter((t) => t.id !== id),
+        }));
+      },
+
+      getCleaningTasksByRoom: (roomId) => {
+        return get().cleaningTasks.filter((t) => t.roomId === roomId);
+      },
+
+      getCleaningTasksByDate: (date) => {
+        return get().cleaningTasks.filter((t) => t.scheduledDate === date);
+      },
+
+      getPendingTasks: () => {
+        const { rooms, bookings, cleaningTasks } = get();
+        const today = todayStr();
+
+        const pendingCleaning = cleaningTasks.filter(
+          (t) => t.status === 'pending' || t.status === 'in-progress'
+        ).length;
+
+        const todayCheckIns = bookings.filter(
+          (b) =>
+            b.status !== 'cancelled' &&
+            b.status !== 'checked-out' &&
+            isSameDayStr(b.checkIn, today)
+        ).length;
+
+        const todayCheckOuts = bookings.filter(
+          (b) =>
+            b.status !== 'cancelled' &&
+            b.status !== 'checked-out' &&
+            isSameDayStr(b.checkOut, today)
+        ).length;
+
+        const maintenanceRooms = rooms.filter(
+          (r) => r.status === 'maintenance'
+        ).length;
+
+        return {
+          pendingCleaning,
+          todayCheckIns,
+          todayCheckOuts,
+          maintenanceRooms,
+          total: pendingCleaning + todayCheckIns + todayCheckOuts + maintenanceRooms,
+        };
       },
     }),
     {

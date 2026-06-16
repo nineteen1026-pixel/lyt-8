@@ -1,18 +1,18 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, X, BedDouble } from 'lucide-react';
-import { format, getMonth, getYear, isSameDay, isToday, parseISO } from 'date-fns';
+import { ChevronLeft, ChevronRight, Plus, BedDouble } from 'lucide-react';
+import { format, getMonth, getYear, isToday, parseISO } from 'date-fns';
 import { useAppStore } from '@/store/useAppStore';
-import { getMonthMatrix, getWeekDays, formatMonth, todayStr, formatDateDisplay, calculateNights } from '@/utils/date';
+import { getMonthMatrix, getWeekDays, formatMonth, formatDateDisplay, calculateNights } from '@/utils/date';
 import type { Booking } from '@/types';
-import { BookingStatusColors, BookingStatusLabels, RoomTypeLabels } from '@/types';
+import { BookingStatusColors, BookingStatusLabels, RoomTypeLabels, RoomStatusLabels } from '@/types';
 import Badge from '@/components/Badge';
 import Modal from '@/components/Modal';
 import BookingForm from './BookingForm';
 
 export default function CalendarView() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { rooms, bookings, getActiveBookingsByDate, getRoomById, addBooking, updateBooking } = useAppStore();
+  const { rooms, getActiveBookingsByDate, getRoomById, addBooking } = useAppStore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [bookingFormOpen, setBookingFormOpen] = useState(false);
@@ -28,7 +28,7 @@ export default function CalendarView() {
           setCurrentDate(date);
           setSelectedDate(dateParam);
         }
-      } catch (e) {
+      } catch {
         // ignore invalid date
       }
     }
@@ -46,12 +46,11 @@ export default function CalendarView() {
   };
 
   const activeRooms = rooms.filter((r) => r.status === 'active');
+  const maintenanceRooms = rooms.filter((r) => r.status === 'maintenance');
   const year = getYear(currentDate);
   const month = getMonth(currentDate);
   const weeks = useMemo(() => getMonthMatrix(year, month), [year, month]);
   const weekDays = getWeekDays();
-
-  const today = todayStr();
 
   const getDayBookings = (date: Date): Booking[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -72,10 +71,12 @@ export default function CalendarView() {
   const getDayColorClass = (date: Date) => {
     const isCurrentMonth = getMonth(date) === month;
     const { ratio } = getDayStatus(date);
+    const hasMaintenance = maintenanceRooms.length > 0;
 
     if (!isCurrentMonth) {
       return 'bg-white/30 text-gray-300';
     }
+    if (hasMaintenance && ratio === 0) return 'bg-rose-50 hover:bg-rose-100';
     if (ratio === 0) return 'bg-white hover:bg-brand-sage/30';
     if (ratio < 0.5) return 'bg-brand-sage/40 hover:bg-brand-sage/60';
     if (ratio < 1) return 'bg-brand-orange/30 hover:bg-brand-orange/40';
@@ -177,6 +178,10 @@ export default function CalendarView() {
                 <span className="w-3 h-3 rounded-full bg-brand-orange/60" />
                 满房
               </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-rose-100 border border-rose-300" />
+                有维护中房间
+              </span>
             </div>
             <button onClick={handleToday} className="btn-secondary">
               今天
@@ -221,17 +226,22 @@ export default function CalendarView() {
                       {format(date, 'd')}
                     </span>
                     {isCurrentMonth && (
-                      <span
-                        className={`text-xs ${
-                          dayStatus.ratio >= 1 ? 'text-white/90' : 'text-brand-taupe'
-                        }`}
-                      >
-                        {dayStatus.ratio > 0 && dayStatus.ratio < 1
-                          ? `${Math.round(dayStatus.ratio * 100)}%`
-                          : dayStatus.ratio >= 1
-                          ? '满'
-                          : ''}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        {maintenanceRooms.length > 0 && (
+                          <span className="w-2 h-2 rounded-full bg-rose-400" title={`${maintenanceRooms.length}间维护中`} />
+                        )}
+                        <span
+                          className={`text-xs ${
+                            dayStatus.ratio >= 1 ? 'text-white/90' : 'text-brand-taupe'
+                          }`}
+                        >
+                          {dayStatus.ratio > 0 && dayStatus.ratio < 1
+                            ? `${Math.round(dayStatus.ratio * 100)}%`
+                            : dayStatus.ratio >= 1
+                            ? '满'
+                            : ''}
+                        </span>
+                      </div>
                     )}
                   </div>
                   {isCurrentMonth && getDayBookings(date).length > 0 && (
@@ -282,7 +292,12 @@ export default function CalendarView() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-sm text-brand-taupe">
-                  共 {activeRooms.length} 间房，已预订 {selectedDateBookings.length} 间
+                  共 {activeRooms.length} 间正常房，已预订 {selectedDateBookings.length} 间
+                  {maintenanceRooms.length > 0 && (
+                    <span className="ml-2 text-rose-600">
+                      · {maintenanceRooms.length} 间维护中
+                    </span>
+                  )}
                 </p>
               </div>
               <button onClick={() => handleNewBookingFromDate()} className="btn-primary">
@@ -290,6 +305,40 @@ export default function CalendarView() {
                 新增预订
               </button>
             </div>
+
+            {maintenanceRooms.length > 0 && (
+              <div className="mb-5">
+                <h3 className="text-sm font-medium text-rose-600 mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                  维护中房间 ({maintenanceRooms.length})
+                </h3>
+                <div className="space-y-2">
+                  {maintenanceRooms.map((room) => (
+                    <div
+                      key={room.id}
+                      className="p-3 rounded-xl bg-rose-50 border border-rose-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center">
+                            <span className="font-display text-base font-bold text-rose-600">
+                              {room.roomNumber}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-brand-brown">{room.name}</div>
+                            <div className="text-xs text-brand-taupe">
+                              {RoomTypeLabels[room.type]}
+                            </div>
+                          </div>
+                        </div>
+                        <Badge variant="warning">{RoomStatusLabels[room.status]}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {activeRooms.length === 0 ? (
               <div className="text-center py-12">
