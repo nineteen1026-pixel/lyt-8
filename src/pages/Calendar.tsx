@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, BedDouble, Building2, Filter } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, BedDouble, Building2, Filter, Ban } from 'lucide-react';
 import { format, getMonth, getYear, isToday, parseISO } from 'date-fns';
 import { useAppStore } from '@/store/useAppStore';
 import { getMonthMatrix, getWeekDays, formatMonth, formatDateDisplay, calculateNights } from '@/utils/date';
-import type { Booking } from '@/types';
-import { BookingStatusColors, BookingStatusLabels, RoomTypeLabels, RoomStatusLabels } from '@/types';
+import type { Booking, ClosedDate } from '@/types';
+import { BookingStatusColors, BookingStatusLabels, RoomTypeLabels, RoomStatusLabels, ClosedDateReasonLabels, ClosedDateReasonColors } from '@/types';
 import Badge from '@/components/Badge';
 import Modal from '@/components/Modal';
 import BookingForm from './BookingForm';
@@ -19,6 +19,8 @@ export default function CalendarView() {
     getRoomById,
     addBooking,
     getStoreById,
+    getClosedDatesByDate,
+    getClosedDatesByRoom,
   } = useAppStore();
   const [storeFilter, setStoreFilter] = useState<string>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -65,25 +67,35 @@ export default function CalendarView() {
     return getActiveBookingsByDate(dateStr, storeFilter);
   };
 
+  const getDayClosedDates = (date: Date): ClosedDate[] => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return getClosedDatesByDate(dateStr, storeFilter);
+  };
+
   const getDayStatus = (date: Date) => {
     const dateBookings = getDayBookings(date);
+    const closedDates = getDayClosedDates(date);
     const occupied = dateBookings.length;
+    const closedRooms = closedDates.length;
     const total = activeRooms.length;
-    if (total === 0) return { ratio: 0, label: '无数据' };
+    if (total === 0) return { ratio: 0, closedRatio: 0, label: '无数据' };
     const ratio = occupied / total;
-    if (ratio === 0) return { ratio, label: '全部空闲' };
-    if (ratio >= 1) return { ratio, label: '全部满房' };
-    return { ratio, label: `已订${occupied}/${total}` };
+    const closedRatio = closedRooms / total;
+    if (closedRatio > 0 && ratio === 0) return { ratio, closedRatio, label: `${closedRooms}间禁订` };
+    if (ratio === 0) return { ratio, closedRatio, label: '全部空闲' };
+    if (ratio >= 1) return { ratio, closedRatio, label: '全部满房' };
+    return { ratio, closedRatio, label: `已订${occupied}/${total}` };
   };
 
   const getDayColorClass = (date: Date) => {
     const isCurrentMonth = getMonth(date) === month;
-    const { ratio } = getDayStatus(date);
+    const { ratio, closedRatio } = getDayStatus(date);
     const hasMaintenance = maintenanceRooms.length > 0;
 
     if (!isCurrentMonth) {
       return 'bg-white/30 text-gray-300';
     }
+    if (closedRatio > 0 && ratio === 0) return 'bg-rose-100 hover:bg-rose-200 text-rose-700';
     if (hasMaintenance && ratio === 0) return 'bg-rose-50 hover:bg-rose-100';
     if (ratio === 0) return 'bg-white hover:bg-brand-sage/30';
     if (ratio < 0.5) return 'bg-brand-sage/40 hover:bg-brand-sage/60';
@@ -132,6 +144,7 @@ export default function CalendarView() {
   };
 
   const selectedDateBookings = selectedDate ? getActiveBookingsByDate(selectedDate, storeFilter) : [];
+  const selectedDateClosedDates = selectedDate ? getClosedDatesByDate(selectedDate, storeFilter) : [];
 
   return (
     <div className="animate-fade-in">
@@ -214,6 +227,10 @@ export default function CalendarView() {
                 <span className="w-3 h-3 rounded-full bg-rose-100 border border-rose-300" />
                 有维护中房间
               </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-rose-200 border border-rose-400" />
+                有禁订房间
+              </span>
             </div>
             <button onClick={handleToday} className="btn-secondary">
               今天
@@ -259,6 +276,9 @@ export default function CalendarView() {
                     </span>
                     {isCurrentMonth && (
                       <div className="flex items-center gap-1">
+                        {dayStatus.closedRatio > 0 && (
+                          <span className="w-2 h-2 rounded-full bg-rose-500" title={`${Math.round(dayStatus.closedRatio * activeRooms.length)}间禁订`} />
+                        )}
                         {maintenanceRooms.length > 0 && (
                           <span className="w-2 h-2 rounded-full bg-rose-400" title={`${maintenanceRooms.length}间维护中`} />
                         )}
@@ -330,6 +350,11 @@ export default function CalendarView() {
                       · {maintenanceRooms.length} 间维护中
                     </span>
                   )}
+                  {selectedDateClosedDates.length > 0 && (
+                    <span className="ml-2 text-rose-700">
+                      · {selectedDateClosedDates.length} 间禁订
+                    </span>
+                  )}
                 </p>
               </div>
               <button onClick={() => handleNewBookingFromDate()} className="btn-primary">
@@ -373,6 +398,52 @@ export default function CalendarView() {
               </div>
             )}
 
+            {selectedDate && selectedDateClosedDates.length > 0 && (
+              <div className="mb-5">
+                <h3 className="text-sm font-medium text-rose-700 mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                  禁订房间 ({selectedDateClosedDates.length})
+                </h3>
+                <div className="space-y-2">
+                  {selectedDateClosedDates.map((cd) => {
+                    const room = getRoomById(cd.roomId);
+                    if (!room) return null;
+                    return (
+                      <div
+                        key={cd.id}
+                        className="p-3 rounded-xl bg-rose-100 border border-rose-300"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-rose-200 flex items-center justify-center">
+                              <Ban className="w-5 h-5 text-rose-600" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-brand-brown">
+                                {room.roomNumber} {room.name}
+                              </div>
+                              <div className="text-xs text-brand-taupe flex items-center gap-1">
+                                <Building2 className="w-3 h-3" />
+                                {getStoreById(room.storeId)?.name || '未知门店'}
+                              </div>
+                              {cd.description && (
+                                <div className="text-xs text-rose-600 mt-0.5">
+                                  {cd.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${ClosedDateReasonColors[cd.reason]}`}>
+                            {ClosedDateReasonLabels[cd.reason]}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {activeRooms.length === 0 ? (
               <div className="text-center py-12">
                 <BedDouble className="w-16 h-16 mx-auto text-brand-brown/30 mb-4" />
@@ -382,13 +453,17 @@ export default function CalendarView() {
               <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                 {activeRooms.map((room) => {
                   const roomBooking = selectedDateBookings.find((b) => b.roomId === room.id);
-                  const isAvailable = !roomBooking;
+                  const roomClosedDate = selectedDateClosedDates.find((cd) => cd.roomId === room.id);
+                  const isAvailable = !roomBooking && !roomClosedDate;
+                  const isClosed = !!roomClosedDate;
 
                   return (
                     <div
                       key={room.id}
                       className={`p-4 rounded-xl border transition-colors ${
-                        isAvailable
+                        isClosed
+                          ? 'bg-rose-100/50 border-rose-300'
+                          : isAvailable
                           ? 'bg-brand-sage/10 border-brand-green/20'
                           : 'bg-brand-orange/5 border-brand-orange/20'
                       }`}
@@ -419,6 +494,16 @@ export default function CalendarView() {
                                 预订
                               </button>
                             </>
+                          ) : isClosed ? (
+                            <div className="text-right">
+                              <Badge variant="danger">禁订</Badge>
+                              {roomClosedDate && (
+                                <div className="text-xs text-rose-600 mt-1">
+                                  {ClosedDateReasonLabels[roomClosedDate.reason]}
+                                  {roomClosedDate.description && ` · ${roomClosedDate.description}`}
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             roomBooking && (
                               <div className="text-right">

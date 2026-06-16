@@ -159,6 +159,44 @@ export function normalizePhone(phone: string): string {
 
 export type ReportGranularity = 'day' | 'month';
 
+export type ClosedDateReason = 'maintenance' | 'holiday' | 'private' | 'other';
+
+export interface ClosedDate {
+  id: string;
+  roomId: string;
+  startDate: string;
+  endDate: string;
+  reason: ClosedDateReason;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const ClosedDateReasonLabels: Record<ClosedDateReason, string> = {
+  maintenance: '维护保养',
+  holiday: '节假日',
+  private: '私用',
+  other: '其他',
+};
+
+export const ClosedDateReasonColors: Record<ClosedDateReason, string> = {
+  maintenance: 'bg-rose-100 text-rose-700',
+  holiday: 'bg-amber-100 text-amber-700',
+  private: 'bg-purple-100 text-purple-700',
+  other: 'bg-gray-100 text-gray-700',
+};
+
+export interface MinStayRule {
+  id: string;
+  roomId: string;
+  startDate: string;
+  endDate: string;
+  minNights: number;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type CleaningTaskStatus = 'pending' | 'in-progress' | 'completed';
 
 export interface CleaningTask {

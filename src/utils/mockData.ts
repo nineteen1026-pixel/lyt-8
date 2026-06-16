@@ -1,4 +1,4 @@
-import type { Room, Booking, Store } from '@/types';
+import type { Room, Booking, Store, ClosedDate, MinStayRule } from '@/types';
 import { normalizePhone } from '@/types';
 import { generateId, todayStr, calculateNights } from './date';
 import { addDays, format, subMonths, subDays } from 'date-fns';
@@ -360,4 +360,76 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
   ];
 
   return [...historicalBookings, ...recentBookings];
+}
+
+export function getInitialClosedDates(rooms: Room[]): ClosedDate[] {
+  if (rooms.length === 0) return [];
+  const now = new Date().toISOString();
+  const today = new Date();
+
+  return [
+    {
+      id: generateId(),
+      roomId: rooms[0].id,
+      startDate: format(addDays(today, 10), 'yyyy-MM-dd'),
+      endDate: format(addDays(today, 12), 'yyyy-MM-dd'),
+      reason: 'maintenance',
+      description: '定期维护保养',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      roomId: rooms[2].id,
+      startDate: format(addDays(today, 15), 'yyyy-MM-dd'),
+      endDate: format(addDays(today, 20), 'yyyy-MM-dd'),
+      reason: 'private',
+      description: '业主自用',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      roomId: rooms[3].id,
+      startDate: format(addDays(today, 5), 'yyyy-MM-dd'),
+      endDate: format(addDays(today, 6), 'yyyy-MM-dd'),
+      reason: 'holiday',
+      description: '节假日暂不接单',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+
+export function getInitialMinStayRules(rooms: Room[]): MinStayRule[] {
+  if (rooms.length === 0) return [];
+  const now = new Date().toISOString();
+  const today = new Date();
+
+  const nextMonth = addDays(today, 30);
+  const nextMonthStart = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1);
+  const nextMonthEnd = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0);
+
+  return [
+    {
+      id: generateId(),
+      roomId: rooms[5].id,
+      startDate: format(nextMonthStart, 'yyyy-MM-dd'),
+      endDate: format(nextMonthEnd, 'yyyy-MM-dd'),
+      minNights: 2,
+      description: '旺季最短连住2晚',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      roomId: rooms[6].id,
+      startDate: format(nextMonthStart, 'yyyy-MM-dd'),
+      endDate: format(nextMonthEnd, 'yyyy-MM-dd'),
+      minNights: 3,
+      description: '旺季套房最短连住3晚',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
 }

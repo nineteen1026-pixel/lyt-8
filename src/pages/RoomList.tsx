@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Users, BedDouble, Wifi, DollarSign, Building2, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, BedDouble, Wifi, DollarSign, Building2, Filter, Calendar } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Room } from '@/types';
 import { RoomTypeLabels, BedTypeLabels, RoomStatusLabels } from '@/types';
 import Badge from '@/components/Badge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import RoomForm from './RoomForm';
+import RoomRulesModal from './RoomRulesModal';
 
 export default function RoomList() {
   const { stores, getRoomsByStore, addRoom, updateRoom, deleteRoom, getBookingsByRoom, getStoreById } = useAppStore();
@@ -14,6 +15,8 @@ export default function RoomList() {
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [storeFilter, setStoreFilter] = useState<string>('all');
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
+  const [rulesRoom, setRulesRoom] = useState<Room | null>(null);
 
   const rooms = useMemo(() => getRoomsByStore(storeFilter), [getRoomsByStore, storeFilter]);
 
@@ -47,6 +50,11 @@ export default function RoomList() {
     }
     setDeleteTarget(null);
     setDeleteError(null);
+  };
+
+  const handleOpenRules = (room: Room) => {
+    setRulesRoom(room);
+    setRulesModalOpen(true);
   };
 
   const handleSubmit = (data: Omit<Room, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -145,6 +153,13 @@ export default function RoomList() {
                     </div>
                   </div>
                   <div className="flex gap-1">
+                    <button
+                      onClick={() => handleOpenRules(room)}
+                      className="p-2 rounded-lg text-brand-taupe hover:bg-brand-sage/20 hover:text-brand-green transition-colors"
+                      title="房间规则"
+                    >
+                      <Calendar className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleEdit(room)}
                       className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
@@ -246,6 +261,12 @@ export default function RoomList() {
         }
         confirmText={deleteError ? '我知道了' : '删除'}
         variant={deleteError ? 'default' : 'danger'}
+      />
+
+      <RoomRulesModal
+        open={rulesModalOpen}
+        onClose={() => setRulesModalOpen(false)}
+        room={rulesRoom}
       />
     </div>
   );

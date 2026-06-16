@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import { useAppStore } from '@/store/useAppStore';
 import { calculateNights, todayStr } from '@/utils/date';
 import { addDays, format } from 'date-fns';
-import { Building2 } from 'lucide-react';
+import { Building2, Clock, Ban } from 'lucide-react';
 
 interface BookingFormProps {
   open: boolean;
@@ -29,7 +29,7 @@ export default function BookingForm({
   prefillCheckIn,
   prefillCheckOut,
 }: BookingFormProps) {
-  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById } = useAppStore();
+  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById, getMinStayForRoom, checkMinStayCompliance, hasClosedDateInRange } = useAppStore();
   const activeRooms = rooms.filter((r) => r.status === 'active');
 
   const [formData, setFormData] = useState({
@@ -130,7 +130,16 @@ export default function BookingForm({
 
     if (formData.roomId && formData.checkIn && formData.checkOut && nights > 0) {
       if (!isRoomAvailable(formData.roomId, formData.checkIn, formData.checkOut, booking?.id)) {
-        newErrors.roomId = '该房间在此时间段已被预订';
+        if (hasClosedDateInRange(formData.roomId, formData.checkIn, formData.checkOut)) {
+          newErrors.roomId = '该房间在此时间段内存在禁订日期，无法预订';
+        } else {
+          newErrors.roomId = '该房间在此时间段已被预订';
+        }
+      }
+
+      if (!newErrors.roomId && !checkMinStayCompliance(formData.roomId, formData.checkIn, formData.checkOut)) {
+        const minNights = getMinStayForRoom(formData.roomId, formData.checkIn, formData.checkOut);
+        newErrors.checkOut = `该时间段内最短连住 ${minNights} 晚，当前预订 ${nights} 晚`;
       }
     }
 
@@ -258,6 +267,35 @@ export default function BookingForm({
                 ¥{formData.totalPrice}
               </span>
             </div>
+            {formData.roomId && formData.checkIn && formData.checkOut && (
+              <div className="mt-3 space-y-1">
+                {(() => {
+                  const minNights = getMinStayForRoom(formData.roomId, formData.checkIn, formData.checkOut);
+                  const meetsMinStay = checkMinStayCompliance(formData.roomId, formData.checkIn, formData.checkOut);
+                  if (minNights > 1) {
+                    return (
+                      <div className={`text-xs flex items-center gap-1 ${meetsMinStay ? 'text-brand-green' : 'text-rose-500'}`}>
+                        <Clock className="w-3.5 h-3.5" />
+                        该时段最短连住 {minNights} 晚{meetsMinStay ? ' ✓' : `，当前 ${nights} 晚`}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                {(() => {
+                  const hasClosed = hasClosedDateInRange(formData.roomId, formData.checkIn, formData.checkOut);
+                  if (hasClosed) {
+                    return (
+                      <div className="text-xs text-rose-500 flex items-center gap-1">
+                        <Ban className="w-3.5 h-3.5" />
+                        该时段内存在禁订日期
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
           </div>
         )}
 

@@ -11,11 +11,14 @@ import type {
   CleaningTask,
   CleaningTaskStatus,
   Store,
+  ClosedDate,
+  ClosedDateReason,
+  MinStayRule,
 } from '@/types';
 import { normalizePhone } from '@/types';
 import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
 import { differenceInDays, parseISO } from 'date-fns';
-import { getInitialStores, getInitialRooms, getInitialBookings } from '@/utils/mockData';
+import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules } from '@/utils/mockData';
 
 type StoreIdFilter = string | 'all';
 
@@ -24,6 +27,8 @@ interface AppState {
   rooms: Room[];
   bookings: Booking[];
   cleaningTasks: CleaningTask[];
+  closedDates: ClosedDate[];
+  minStayRules: MinStayRule[];
   initialized: boolean;
 
   initializeData: () => void;
@@ -57,6 +62,21 @@ interface AppState {
     excludeBookingId?: string
   ) => boolean;
   getAvailableRooms: (checkIn: string, checkOut: string, storeId?: StoreIdFilter) => Room[];
+  getMinStayForRoom: (roomId: string, checkIn: string, checkOut: string) => number;
+  checkMinStayCompliance: (roomId: string, checkIn: string, checkOut: string) => boolean;
+
+  addClosedDate: (closedDate: Omit<ClosedDate, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateClosedDate: (id: string, closedDate: Partial<ClosedDate>) => void;
+  deleteClosedDate: (id: string) => void;
+  getClosedDatesByRoom: (roomId: string) => ClosedDate[];
+  getClosedDatesByDate: (date: string, storeId?: StoreIdFilter) => ClosedDate[];
+  isDateClosed: (roomId: string, date: string) => boolean;
+  hasClosedDateInRange: (roomId: string, startDate: string, endDate: string) => boolean;
+
+  addMinStayRule: (rule: Omit<MinStayRule, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateMinStayRule: (id: string, rule: Partial<MinStayRule>) => void;
+  deleteMinStayRule: (id: string) => void;
+  getMinStayRulesByRoom: (roomId: string) => MinStayRule[];
 
   getTodayStats: (storeId?: StoreIdFilter) => {
     totalRooms: number;
@@ -105,6 +125,8 @@ export const useAppStore = create<AppState>()(
       rooms: [],
       bookings: [],
       cleaningTasks: [],
+      closedDates: [],
+      minStayRules: [],
       initialized: false,
 
       initializeData: () => {
@@ -126,10 +148,14 @@ export const useAppStore = create<AppState>()(
         const initialStores = getInitialStores();
         const initialRooms = getInitialRooms(initialStores);
         const initialBookings = getInitialBookings(initialRooms);
+        const initialClosedDates = getInitialClosedDates(initialRooms);
+        const initialMinStayRules = getInitialMinStayRules(initialRooms);
         set({
           stores: initialStores,
           rooms: initialRooms,
           bookings: initialBookings,
+          closedDates: initialClosedDates,
+          minStayRules: initialMinStayRules,
           initialized: true,
         });
       },
@@ -345,17 +371,27 @@ export const useAppStore = create<AppState>()(
       },
 
       isRoomAvailable: (roomId, checkIn, checkOut, excludeBookingId) => {
-        const { bookings } = get();
+        const { bookings, closedDates } = get();
         const room = get().rooms.find((r) => r.id === roomId);
         if (!room || room.status !== 'active') return false;
 
-        return !bookings.some(
+        const hasBookingConflict = bookings.some(
           (b) =>
             b.id !== excludeBookingId &&
             b.roomId === roomId &&
             b.status !== 'cancelled' &&
             isDateOverlap(checkIn, checkOut, b.checkIn, b.checkOut)
         );
+        if (hasBookingConflict) return false;
+
+        const hasClosedDateConflict = closedDates.some(
+          (cd) =>
+            cd.roomId === roomId &&
+            isDateOverlap(checkIn, checkOut, cd.startDate, cd.endDate)
+        );
+        if (hasClosedDateConflict) return false;
+
+        return true;
       },
 
       getAvailableRooms: (checkIn, checkOut, storeId = 'all') => {
@@ -364,6 +400,27 @@ export const useAppStore = create<AppState>()(
         return rooms.filter(
           (r) => r.status === 'active' && isRoomAvailable(r.id, checkIn, checkOut)
         );
+      },
+
+      getMinStayForRoom: (roomId, checkIn, checkOut) => {
+        const { minStayRules } = get();
+        let maxMinNights = 1;
+
+        minStayRules.forEach((rule) => {
+          if (rule.roomId === roomId && isDateOverlap(checkIn, checkOut, rule.startDate, rule.endDate)) {
+            if (rule.minNights > maxMinNights) {
+              maxMinNights = rule.minNights;
+            }
+          }
+        });
+
+        return maxMinNights;
+      },
+
+      checkMinStayCompliance: (roomId, checkIn, checkOut) => {
+        const nights = calculateNights(checkIn, checkOut);
+        const minNights = get().getMinStayForRoom(roomId, checkIn, checkOut);
+        return nights >= minNights;
       },
 
       getTodayStats: (storeId = 'all') => {
@@ -761,6 +818,87 @@ export const useAppStore = create<AppState>()(
           maintenanceRooms,
           total: pendingCleaning + todayCheckIns + todayCheckOuts + maintenanceRooms,
         };
+      },
+
+      addClosedDate: (closedDate) => {
+        const now = new Date().toISOString();
+        const newClosedDate: ClosedDate = {
+          ...closedDate,
+          id: generateId(),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({ closedDates: [...state.closedDates, newClosedDate] }));
+      },
+
+      updateClosedDate: (id, closedDate) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          closedDates: state.closedDates.map((cd) =>
+            cd.id === id ? { ...cd, ...closedDate, updatedAt: now } : cd
+          ),
+        }));
+      },
+
+      deleteClosedDate: (id) => {
+        set((state) => ({
+          closedDates: state.closedDates.filter((cd) => cd.id !== id),
+        }));
+      },
+
+      getClosedDatesByRoom: (roomId) => {
+        return get().closedDates.filter((cd) => cd.roomId === roomId);
+      },
+
+      getClosedDatesByDate: (date, storeId = 'all') => {
+        const { getRoomsByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const roomIds = new Set(rooms.map((r) => r.id));
+        return get().closedDates.filter(
+          (cd) => roomIds.has(cd.roomId) && isDateOverlap(date, date, cd.startDate, cd.endDate)
+        );
+      },
+
+      isDateClosed: (roomId, date) => {
+        return get().closedDates.some(
+          (cd) => cd.roomId === roomId && isDateOverlap(date, date, cd.startDate, cd.endDate)
+        );
+      },
+
+      hasClosedDateInRange: (roomId, startDate, endDate) => {
+        return get().closedDates.some(
+          (cd) => cd.roomId === roomId && isDateOverlap(startDate, endDate, cd.startDate, cd.endDate)
+        );
+      },
+
+      addMinStayRule: (rule) => {
+        const now = new Date().toISOString();
+        const newRule: MinStayRule = {
+          ...rule,
+          id: generateId(),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({ minStayRules: [...state.minStayRules, newRule] }));
+      },
+
+      updateMinStayRule: (id, rule) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          minStayRules: state.minStayRules.map((r) =>
+            r.id === id ? { ...r, ...rule, updatedAt: now } : r
+          ),
+        }));
+      },
+
+      deleteMinStayRule: (id) => {
+        set((state) => ({
+          minStayRules: state.minStayRules.filter((r) => r.id !== id),
+        }));
+      },
+
+      getMinStayRulesByRoom: (roomId) => {
+        return get().minStayRules.filter((r) => r.roomId === roomId);
       },
     }),
     {
