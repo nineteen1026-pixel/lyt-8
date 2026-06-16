@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, BedDouble, Building2, Filter, Ban } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, BedDouble, Building2, Filter, Ban, LogIn, LogOut } from 'lucide-react';
 import { format, getMonth, getYear, isToday, parseISO } from 'date-fns';
 import { useAppStore } from '@/store/useAppStore';
 import { getMonthMatrix, getWeekDays, formatMonth, formatDateDisplay, calculateNights } from '@/utils/date';
@@ -18,6 +18,7 @@ export default function CalendarView() {
     getActiveBookingsByDate,
     getRoomById,
     addBooking,
+    updateBookingStatus,
     getStoreById,
     getClosedDatesByDate,
     getClosedDatesByRoom,
@@ -515,11 +516,31 @@ export default function CalendarView() {
                                   {formatDateDisplay(roomBooking.checkOut)} (
                                   {calculateNights(roomBooking.checkIn, roomBooking.checkOut)}晚)
                                 </div>
-                                <span
-                                  className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${BookingStatusColors[roomBooking.status]}`}
-                                >
-                                  {BookingStatusLabels[roomBooking.status]}
-                                </span>
+                                <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                                  <span
+                                    className={`text-xs px-2 py-0.5 rounded-full ${BookingStatusColors[roomBooking.status]}`}
+                                  >
+                                    {BookingStatusLabels[roomBooking.status]}
+                                  </span>
+                                  {roomBooking.status === 'confirmed' && (
+                                    <button
+                                      onClick={() => updateBookingStatus(roomBooking.id, 'checked-in')}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-brand-green/20 text-brand-green hover:bg-brand-green/30 transition-colors"
+                                    >
+                                      <LogIn className="w-3 h-3" />
+                                      入住
+                                    </button>
+                                  )}
+                                  {roomBooking.status === 'checked-in' && (
+                                    <button
+                                      onClick={() => updateBookingStatus(roomBooking.id, 'checked-out')}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-brand-orange/20 text-brand-orange hover:bg-brand-orange/30 transition-colors"
+                                    >
+                                      <LogOut className="w-3 h-3" />
+                                      退房
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             )
                           )}
