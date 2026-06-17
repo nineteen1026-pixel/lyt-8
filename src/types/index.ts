@@ -19,6 +19,12 @@ export type Permission =
   | 'room:update'
   | 'room:delete'
   | 'room:rules'
+  | 'room:closeddate:create'
+  | 'room:closeddate:update'
+  | 'room:closeddate:delete'
+  | 'room:minstay:create'
+  | 'room:minstay:update'
+  | 'room:minstay:delete'
   | 'booking:view'
   | 'booking:create'
   | 'booking:update'
@@ -44,6 +50,12 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'room:update',
     'room:delete',
     'room:rules',
+    'room:closeddate:create',
+    'room:closeddate:update',
+    'room:closeddate:delete',
+    'room:minstay:create',
+    'room:minstay:update',
+    'room:minstay:delete',
     'booking:view',
     'booking:create',
     'booking:update',
@@ -62,6 +74,12 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'store:view',
     'room:view',
     'room:rules',
+    'room:closeddate:create',
+    'room:closeddate:update',
+    'room:closeddate:delete',
+    'room:minstay:create',
+    'room:minstay:update',
+    'room:minstay:delete',
     'booking:view',
     'booking:create',
     'booking:update',
@@ -89,6 +107,12 @@ export type AuditAction =
   | 'room:create'
   | 'room:update'
   | 'room:delete'
+  | 'room:closeddate:create'
+  | 'room:closeddate:update'
+  | 'room:closeddate:delete'
+  | 'room:minstay:create'
+  | 'room:minstay:update'
+  | 'room:minstay:delete'
   | 'booking:create'
   | 'booking:update'
   | 'booking:cancel'
@@ -104,6 +128,12 @@ export const AuditActionLabels: Record<AuditAction, string> = {
   'room:create': '创建房间',
   'room:update': '更新房间',
   'room:delete': '删除房间',
+  'room:closeddate:create': '添加禁订日期',
+  'room:closeddate:update': '更新禁订日期',
+  'room:closeddate:delete': '删除禁订日期',
+  'room:minstay:create': '添加最短连住规则',
+  'room:minstay:update': '更新最短连住规则',
+  'room:minstay:delete': '删除最短连住规则',
   'booking:create': '创建预订',
   'booking:update': '更新预订',
   'booking:cancel': '取消预订',

@@ -19,7 +19,7 @@ import type {
   AuditLog,
   AuditAction,
 } from '@/types';
-import { normalizePhone, RolePermissions } from '@/types';
+import { normalizePhone, RolePermissions, ClosedDateReasonLabels } from '@/types';
 import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
 import { differenceInDays, parseISO } from 'date-fns';
 import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules } from '@/utils/mockData';
@@ -183,6 +183,7 @@ export const useAppStore = create<AppState>()(
       },
 
       switchUser: (userId) => {
+        if (!get().hasPermission('user:switch')) return;
         const user = get().users.find((u) => u.id === userId);
         if (user) {
           const prevUser = get().currentUser;
@@ -228,6 +229,7 @@ export const useAppStore = create<AppState>()(
       },
 
       addStore: (store) => {
+        if (!get().hasPermission('store:create')) return;
         const now = new Date().toISOString();
         const newStore: Store = {
           ...store,
@@ -240,6 +242,7 @@ export const useAppStore = create<AppState>()(
       },
 
       updateStore: (id, store) => {
+        if (!get().hasPermission('store:update')) return;
         const now = new Date().toISOString();
         const oldStore = get().getStoreById(id);
         set((state) => ({
@@ -257,6 +260,7 @@ export const useAppStore = create<AppState>()(
       },
 
       deleteStore: (id) => {
+        if (!get().hasPermission('store:delete')) return false;
         const { rooms } = get();
         const hasRooms = rooms.some((r) => r.storeId === id);
         if (hasRooms) return false;
@@ -276,6 +280,7 @@ export const useAppStore = create<AppState>()(
       },
 
       addRoom: (room) => {
+        if (!get().hasPermission('room:create')) return;
         const now = new Date().toISOString();
         const newRoom: Room = {
           ...room,
@@ -289,6 +294,7 @@ export const useAppStore = create<AppState>()(
       },
 
       updateRoom: (id, room) => {
+        if (!get().hasPermission('room:update')) return;
         const now = new Date().toISOString();
         const oldRoom = get().getRoomById(id);
         set((state) => ({
@@ -306,6 +312,7 @@ export const useAppStore = create<AppState>()(
       },
 
       deleteRoom: (id) => {
+        if (!get().hasPermission('room:delete')) return false;
         const { bookings } = get();
         const hasActiveBooking = bookings.some(
           (b) =>
@@ -336,6 +343,7 @@ export const useAppStore = create<AppState>()(
       },
 
       addBooking: (booking) => {
+        if (!get().hasPermission('booking:create')) return false;
         const { isRoomAvailable } = get();
         if (!isRoomAvailable(booking.roomId, booking.checkIn, booking.checkOut)) {
           return false;
@@ -356,6 +364,7 @@ export const useAppStore = create<AppState>()(
       },
 
       updateBooking: (id, booking) => {
+        if (!get().hasPermission('booking:update')) return false;
         const state = get();
         const existing = state.bookings.find((b) => b.id === id);
         if (!existing) return false;
@@ -393,6 +402,7 @@ export const useAppStore = create<AppState>()(
       },
 
       cancelBooking: (id, reason) => {
+        if (!get().hasPermission('booking:cancel')) return;
         const now = new Date().toISOString();
         const existing = get().getBookingById(id);
         set((state) => ({
@@ -408,6 +418,8 @@ export const useAppStore = create<AppState>()(
       },
 
       updateBookingStatus: (id, status) => {
+        if (status === 'checked-in' && !get().hasPermission('booking:checkin')) return;
+        if (status === 'checked-out' && !get().hasPermission('booking:checkout')) return;
         const now = new Date().toISOString();
         const booking = get().bookings.find((b) => b.id === id);
         set((state) => ({
@@ -843,6 +855,7 @@ export const useAppStore = create<AppState>()(
       },
 
       addCleaningTask: (task) => {
+        if (!get().hasPermission('cleaning:update')) return;
         const now = new Date().toISOString();
         const newTask: CleaningTask = {
           ...task,
@@ -854,6 +867,7 @@ export const useAppStore = create<AppState>()(
       },
 
       updateCleaningTask: (id, task) => {
+        if (!get().hasPermission('cleaning:update')) return;
         const now = new Date().toISOString();
         const oldTask = get().cleaningTasks.find((t) => t.id === id);
         set((state) => ({
@@ -868,6 +882,7 @@ export const useAppStore = create<AppState>()(
       },
 
       updateCleaningTaskStatus: (id, status) => {
+        if (!get().hasPermission('cleaning:update')) return;
         const now = new Date().toISOString();
         const completedAt = status === 'completed' ? now : undefined;
         const oldTask = get().cleaningTasks.find((t) => t.id === id);
@@ -883,6 +898,7 @@ export const useAppStore = create<AppState>()(
       },
 
       deleteCleaningTask: (id) => {
+        if (!get().hasPermission('cleaning:update')) return;
         set((state) => ({
           cleaningTasks: state.cleaningTasks.filter((t) => t.id !== id),
         }));
@@ -944,6 +960,7 @@ export const useAppStore = create<AppState>()(
       },
 
       addClosedDate: (closedDate) => {
+        if (!get().hasPermission('room:closeddate:create')) return;
         const now = new Date().toISOString();
         const newClosedDate: ClosedDate = {
           ...closedDate,
@@ -952,21 +969,58 @@ export const useAppStore = create<AppState>()(
           updatedAt: now,
         };
         set((state) => ({ closedDates: [...state.closedDates, newClosedDate] }));
+        const room = get().getRoomById(closedDate.roomId);
+        const reasonLabel = ClosedDateReasonLabels[closedDate.reason] || closedDate.reason;
+        get().addAuditLog(
+          'room:closeddate:create',
+          newClosedDate.id,
+          room?.roomNumber,
+          `房间${room?.roomNumber || ''} 添加禁订日期 ${closedDate.startDate}~${closedDate.endDate} 原因:${reasonLabel}${closedDate.description ? ' 说明:' + closedDate.description : ''}`
+        );
       },
 
       updateClosedDate: (id, closedDate) => {
+        if (!get().hasPermission('room:closeddate:update')) return;
         const now = new Date().toISOString();
+        const oldClosedDate = get().closedDates.find((cd) => cd.id === id);
         set((state) => ({
           closedDates: state.closedDates.map((cd) =>
             cd.id === id ? { ...cd, ...closedDate, updatedAt: now } : cd
           ),
         }));
+        if (oldClosedDate) {
+          const room = get().getRoomById(oldClosedDate.roomId);
+          const changes: string[] = [];
+          if (closedDate.startDate && closedDate.startDate !== oldClosedDate.startDate) changes.push(`开始日期: ${oldClosedDate.startDate} → ${closedDate.startDate}`);
+          if (closedDate.endDate && closedDate.endDate !== oldClosedDate.endDate) changes.push(`结束日期: ${oldClosedDate.endDate} → ${closedDate.endDate}`);
+          if (closedDate.reason && closedDate.reason !== oldClosedDate.reason) changes.push(`原因: ${ClosedDateReasonLabels[oldClosedDate.reason]} → ${ClosedDateReasonLabels[closedDate.reason]}`);
+          if (closedDate.description !== undefined && closedDate.description !== oldClosedDate.description) changes.push(`说明变更`);
+          get().addAuditLog(
+            'room:closeddate:update',
+            id,
+            room?.roomNumber,
+            changes.length > 0
+              ? `房间${room?.roomNumber || ''} 更新禁订日期: ${changes.join('; ')}`
+              : `房间${room?.roomNumber || ''} 更新禁订日期 ${oldClosedDate.startDate}~${oldClosedDate.endDate}`
+          );
+        }
       },
 
       deleteClosedDate: (id) => {
+        if (!get().hasPermission('room:closeddate:delete')) return;
+        const targetClosedDate = get().closedDates.find((cd) => cd.id === id);
         set((state) => ({
           closedDates: state.closedDates.filter((cd) => cd.id !== id),
         }));
+        if (targetClosedDate) {
+          const room = get().getRoomById(targetClosedDate.roomId);
+          get().addAuditLog(
+            'room:closeddate:delete',
+            id,
+            room?.roomNumber,
+            `房间${room?.roomNumber || ''} 删除禁订日期 ${targetClosedDate.startDate}~${targetClosedDate.endDate}`
+          );
+        }
       },
 
       getClosedDatesByRoom: (roomId) => {
@@ -995,6 +1049,7 @@ export const useAppStore = create<AppState>()(
       },
 
       addMinStayRule: (rule) => {
+        if (!get().hasPermission('room:minstay:create')) return;
         const now = new Date().toISOString();
         const newRule: MinStayRule = {
           ...rule,
@@ -1003,21 +1058,57 @@ export const useAppStore = create<AppState>()(
           updatedAt: now,
         };
         set((state) => ({ minStayRules: [...state.minStayRules, newRule] }));
+        const room = get().getRoomById(rule.roomId);
+        get().addAuditLog(
+          'room:minstay:create',
+          newRule.id,
+          room?.roomNumber,
+          `房间${room?.roomNumber || ''} 添加最短连住规则 ${rule.minNights}晚 ${rule.startDate}~${rule.endDate}${rule.description ? ' 说明:' + rule.description : ''}`
+        );
       },
 
       updateMinStayRule: (id, rule) => {
+        if (!get().hasPermission('room:minstay:update')) return;
         const now = new Date().toISOString();
+        const oldRule = get().minStayRules.find((r) => r.id === id);
         set((state) => ({
           minStayRules: state.minStayRules.map((r) =>
             r.id === id ? { ...r, ...rule, updatedAt: now } : r
           ),
         }));
+        if (oldRule) {
+          const room = get().getRoomById(oldRule.roomId);
+          const changes: string[] = [];
+          if (rule.minNights !== undefined && rule.minNights !== oldRule.minNights) changes.push(`晚数: ${oldRule.minNights}晚 → ${rule.minNights}晚`);
+          if (rule.startDate && rule.startDate !== oldRule.startDate) changes.push(`开始日期: ${oldRule.startDate} → ${rule.startDate}`);
+          if (rule.endDate && rule.endDate !== oldRule.endDate) changes.push(`结束日期: ${oldRule.endDate} → ${rule.endDate}`);
+          if (rule.description !== undefined && rule.description !== oldRule.description) changes.push(`说明变更`);
+          get().addAuditLog(
+            'room:minstay:update',
+            id,
+            room?.roomNumber,
+            changes.length > 0
+              ? `房间${room?.roomNumber || ''} 更新最短连住规则: ${changes.join('; ')}`
+              : `房间${room?.roomNumber || ''} 更新最短连住规则 ${oldRule.minNights}晚 ${oldRule.startDate}~${oldRule.endDate}`
+          );
+        }
       },
 
       deleteMinStayRule: (id) => {
+        if (!get().hasPermission('room:minstay:delete')) return;
+        const targetRule = get().minStayRules.find((r) => r.id === id);
         set((state) => ({
           minStayRules: state.minStayRules.filter((r) => r.id !== id),
         }));
+        if (targetRule) {
+          const room = get().getRoomById(targetRule.roomId);
+          get().addAuditLog(
+            'room:minstay:delete',
+            id,
+            room?.roomNumber,
+            `房间${room?.roomNumber || ''} 删除最短连住规则 ${targetRule.minNights}晚 ${targetRule.startDate}~${targetRule.endDate}`
+          );
+        }
       },
 
       getMinStayRulesByRoom: (roomId) => {

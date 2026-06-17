@@ -25,7 +25,15 @@ export default function RoomRulesModal({ open, onClose, room }: RoomRulesModalPr
     addMinStayRule,
     updateMinStayRule,
     deleteMinStayRule,
+    hasPermission,
   } = useAppStore();
+
+  const canCreateClosedDate = hasPermission('room:closeddate:create');
+  const canUpdateClosedDate = hasPermission('room:closeddate:update');
+  const canDeleteClosedDate = hasPermission('room:closeddate:delete');
+  const canCreateMinStay = hasPermission('room:minstay:create');
+  const canUpdateMinStay = hasPermission('room:minstay:update');
+  const canDeleteMinStay = hasPermission('room:minstay:delete');
 
   const [activeTab, setActiveTab] = useState<TabType>('closedDates');
   const [closedDateFormOpen, setClosedDateFormOpen] = useState(false);
@@ -144,10 +152,12 @@ export default function RoomRulesModal({ open, onClose, room }: RoomRulesModalPr
               <p className="text-sm text-brand-taupe">
                 设置房间不可预订的日期区间，如维护、节假日等
               </p>
-              <button onClick={handleAddClosedDate} className="btn-primary !py-1.5 !px-3 text-sm">
-                <Plus className="w-4 h-4" />
-                添加禁订
-              </button>
+              {canCreateClosedDate && (
+                <button onClick={handleAddClosedDate} className="btn-primary !py-1.5 !px-3 text-sm">
+                  <Plus className="w-4 h-4" />
+                  添加禁订
+                </button>
+              )}
             </div>
 
             {closedDates.length === 0 ? (
@@ -181,20 +191,24 @@ export default function RoomRulesModal({ open, onClose, room }: RoomRulesModalPr
                         <span className={`text-xs px-2 py-0.5 rounded-full ${ClosedDateReasonColors[cd.reason]}`}>
                           {ClosedDateReasonLabels[cd.reason]}
                         </span>
-                        <button
-                          onClick={() => handleEditClosedDate(cd)}
-                          className="p-1.5 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
-                          title="编辑"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClosedDate(cd)}
-                          className="p-1.5 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
-                          title="删除"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canUpdateClosedDate && (
+                          <button
+                            onClick={() => handleEditClosedDate(cd)}
+                            className="p-1.5 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                            title="编辑"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeleteClosedDate && (
+                          <button
+                            onClick={() => handleDeleteClosedDate(cd)}
+                            className="p-1.5 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
+                            title="删除"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -210,10 +224,12 @@ export default function RoomRulesModal({ open, onClose, room }: RoomRulesModalPr
               <p className="text-sm text-brand-taupe">
                 设置特定日期区间的最短连住晚数要求
               </p>
-              <button onClick={handleAddMinStayRule} className="btn-primary !py-1.5 !px-3 text-sm">
-                <Plus className="w-4 h-4" />
-                添加规则
-              </button>
+              {canCreateMinStay && (
+                <button onClick={handleAddMinStayRule} className="btn-primary !py-1.5 !px-3 text-sm">
+                  <Plus className="w-4 h-4" />
+                  添加规则
+                </button>
+              )}
             </div>
 
             {minStayRules.length === 0 ? (
@@ -245,20 +261,24 @@ export default function RoomRulesModal({ open, onClose, room }: RoomRulesModalPr
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEditMinStayRule(rule)}
-                          className="p-1.5 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
-                          title="编辑"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMinStayRule(rule)}
-                          className="p-1.5 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
-                          title="删除"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canUpdateMinStay && (
+                          <button
+                            onClick={() => handleEditMinStayRule(rule)}
+                            className="p-1.5 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                            title="编辑"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeleteMinStay && (
+                          <button
+                            onClick={() => handleDeleteMinStayRule(rule)}
+                            className="p-1.5 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
+                            title="删除"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
