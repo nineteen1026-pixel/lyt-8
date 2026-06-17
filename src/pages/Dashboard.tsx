@@ -16,10 +16,12 @@ import {
   Wrench,
   Building2,
   Filter,
+  FileSignature,
+  Clock,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import Badge from '@/components/Badge';
-import { BookingStatusColors, BookingStatusLabels } from '@/types';
+import { BookingStatusColors, BookingStatusLabels, LongTermContractStatusColors, LongTermContractStatusLabels } from '@/types';
 import { todayStr, isSameDayStr, formatDateDisplay } from '@/utils/date';
 
 export default function Dashboard() {
@@ -33,6 +35,11 @@ export default function Dashboard() {
     getPendingTasks,
     getCleaningTasksByStore,
     getRoomById,
+    getExpiringContracts,
+    getOverduePayments,
+    getContractExpiryInfo,
+    longTermContracts,
+    hasPermission,
   } = useAppStore();
 
   const [storeFilter, setStoreFilter] = useState<string>('all');
@@ -44,6 +51,15 @@ export default function Dashboard() {
   const rooms = getRoomsByStore(storeFilter);
   const cleaningTasks = getCleaningTasksByStore(storeFilter);
   const today = todayStr();
+
+  const expiringContracts = useMemo(() => getExpiringContracts(30, storeFilter), [getExpiringContracts, storeFilter]);
+  const overduePayments = useMemo(() => getOverduePayments(storeFilter), [getOverduePayments, storeFilter]);
+  const activeLongTermCount = useMemo(
+    () => longTermContracts.filter((c) => c.status === 'active' || c.status === 'expiring').length,
+    [longTermContracts]
+  );
+
+  const canViewLongTerm = hasPermission('longterm:view');
 
   const todayCheckIns = useMemo(
     () => bookings.filter(
@@ -236,6 +252,18 @@ export default function Dashboard() {
               <h3 className="font-semibold text-brand-brown mb-1">新增预订</h3>
               <p className="text-sm text-brand-taupe">快速登记客人入住</p>
             </button>
+            {canViewLongTerm && (
+              <button
+                onClick={() => navigate('/long-term')}
+                className="group p-5 rounded-xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-200/50 hover:border-indigo-300 hover:shadow-soft transition-all text-left"
+              >
+                <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center mb-3 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                  <FileSignature className="w-6 h-6 text-indigo-600 group-hover:text-white transition-colors" />
+                </div>
+                <h3 className="font-semibold text-brand-brown mb-1">长租管理</h3>
+                <p className="text-sm text-brand-taupe">{activeLongTermCount} 份履行中合同</p>
+              </button>
+            )}
           </div>
         </div>
 
@@ -518,6 +546,74 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {canViewLongTerm && (expiringContracts.length > 0 || overduePayments.length > 0) && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-brand-brown flex items-center gap-2">
+                <FileSignature className="w-4 h-4 text-indigo-500" />
+                长租到期与逾期预警
+              </h3>
+              <button
+                onClick={() => navigate('/long-term')}
+                className="text-xs text-brand-brown hover:text-brand-brownLight flex items-center gap-1"
+              >
+                查看详情 <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {expiringContracts.length > 0 && (
+                <div
+                  className="p-4 rounded-xl bg-amber-50 border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors"
+                  onClick={() => navigate('/long-term')}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm text-amber-700 font-medium">即将到期合同</span>
+                  </div>
+                  <div className="font-display text-3xl font-bold text-amber-600">
+                    {expiringContracts.length}
+                  </div>
+                  <div className="text-xs text-amber-600 mt-1">
+                    含 {expiringContracts.filter((c) => getContractExpiryInfo(c.id)?.alertLevel === 'urgent').length} 份紧急
+                  </div>
+                </div>
+              )}
+              {overduePayments.length > 0 && (
+                <div
+                  className="p-4 rounded-xl bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
+                  onClick={() => navigate('/long-term')}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-4 h-4 text-red-600" />
+                    <span className="text-sm text-red-700 font-medium">逾期待收租金</span>
+                  </div>
+                  <div className="font-display text-3xl font-bold text-red-600">
+                    {overduePayments.length}
+                  </div>
+                  <div className="text-xs text-red-600 mt-1">
+                    ¥{overduePayments.reduce((s, p) => s + p.amount - p.paidAmount, 0).toLocaleString()} 待收
+                  </div>
+                </div>
+              )}
+              <div
+                className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                onClick={() => navigate('/long-term')}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <FileSignature className="w-4 h-4 text-indigo-600" />
+                  <span className="text-sm text-indigo-700 font-medium">履行中长租</span>
+                </div>
+                <div className="font-display text-3xl font-bold text-indigo-600">
+                  {activeLongTermCount}
+                </div>
+                <div className="text-xs text-indigo-600 mt-1">
+                  长租合同管理
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {cleaningTasks.filter((t) => t.status !== 'completed').length > 0 && (
           <div>

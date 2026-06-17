@@ -189,6 +189,7 @@ interface AppState {
   getExpiringContracts: (daysThreshold?: number, storeId?: StoreIdFilter) => LongTermContract[];
   getOverduePayments: (storeId?: StoreIdFilter) => PaymentRecord[];
   updateLongTermContractStatuses: () => void;
+  updatePaymentRecordStatuses: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -210,7 +211,7 @@ export const useAppStore = create<AppState>()(
       initialized: false,
 
       initializeData: () => {
-        const { initialized, rooms, bookings, expireOldWaitlistEntries, longTermContracts, updateLongTermContractStatuses } = get();
+        const { initialized, rooms, bookings, expireOldWaitlistEntries, longTermContracts, updateLongTermContractStatuses, updatePaymentRecordStatuses } = get();
         if (initialized && rooms.length > 0) {
           const hasNonNormalized = bookings.some(
             (b) => b.guestPhone !== normalizePhone(b.guestPhone)
@@ -246,6 +247,7 @@ export const useAppStore = create<AppState>()(
           }
           expireOldWaitlistEntries();
           updateLongTermContractStatuses();
+          updatePaymentRecordStatuses();
           return;
         }
 
@@ -1642,12 +1644,68 @@ export const useAppStore = create<AppState>()(
         if (updateData.months && !updateData.endDate) {
           updateData.endDate = addMonthsStr(updateData.startDate || existing.startDate, updateData.months);
         }
-        if (updateData.monthlyRent && !updateData.totalAmount) {
-          updateData.totalAmount = updateData.monthlyRent * (updateData.months || existing.months);
+
+        const newStartDate = updateData.startDate || existing.startDate;
+        const newMonths = updateData.months || existing.months;
+        const newEndDate = updateData.endDate || existing.endDate;
+        const newMonthlyRent = updateData.monthlyRent ?? existing.monthlyRent;
+
+        const needRecalcPayments =
+          updateData.startDate !== undefined ||
+          updateData.months !== undefined ||
+          updateData.monthlyRent !== undefined;
+
+        let newPaymentRecords = existing.paymentRecords;
+        let newPaidAmount = existing.paidAmount;
+        let newTotalAmount = newMonthlyRent * newMonths;
+
+        if (needRecalcPayments) {
+          const paidRecords = existing.paymentRecords.filter((p) => p.paidAmount > 0);
+          newPaymentRecords = [];
+          for (let i = 0; i < newMonths; i++) {
+            const matchingPaid = paidRecords.find((p) => p.monthIndex === i);
+            if (matchingPaid) {
+              newPaymentRecords.push({
+                ...matchingPaid,
+                amount: newMonthlyRent,
+                period: getContractPeriodLabel(newStartDate, i),
+                dueDate: getMonthDueDate(newStartDate, i),
+                updatedAt: now,
+              });
+            } else {
+              newPaymentRecords.push({
+                id: generateId(),
+                contractId: id,
+                period: getContractPeriodLabel(newStartDate, i),
+                monthIndex: i,
+                dueDate: getMonthDueDate(newStartDate, i),
+                amount: newMonthlyRent,
+                paidAmount: 0,
+                status: 'pending',
+                createdAt: now,
+                updatedAt: now,
+              });
+            }
+          }
+          newPaidAmount = newPaymentRecords.reduce((sum, p) => sum + p.paidAmount, 0);
         }
+
+        updateData.endDate = newEndDate;
+        updateData.months = newMonths;
+        updateData.monthlyRent = newMonthlyRent;
+        updateData.totalAmount = newTotalAmount;
+        updateData.paidAmount = newPaidAmount;
+
         set((s) => ({
           longTermContracts: s.longTermContracts.map((c) =>
-            c.id === id ? { ...c, ...updateData, updatedAt: now } : c
+            c.id === id
+              ? {
+                  ...c,
+                  ...updateData,
+                  paymentRecords: needRecalcPayments ? newPaymentRecords : c.paymentRecords,
+                  updatedAt: now,
+                }
+              : c
           ),
         }));
         const changes: string[] = [];
@@ -1725,7 +1783,7 @@ export const useAppStore = create<AppState>()(
           deposit: existing.deposit,
           totalAmount,
           paidAmount: 0,
-          status: 'renewed',
+          status: 'active',
           paymentRecords,
           renewCount: existing.renewCount + 1,
           originalContractId: existing.id,
@@ -1912,7 +1970,7 @@ export const useAppStore = create<AppState>()(
         const updated = longTermContracts.map((c) => {
           if (c.status === 'cancelled' || c.status === 'renewed') return c;
           const expiry = getContractExpiryInfo(c.id);
-          let newStatus = c.status;
+          let newStatus: LongTermContractStatus = c.status;
           if (c.endDate < today && c.status !== 'expired') {
             newStatus = 'expired';
           } else if (expiry && expiry.alertLevel === 'urgent' && expiry.daysRemaining > 0 && c.status === 'active') {
@@ -1922,7 +1980,32 @@ export const useAppStore = create<AppState>()(
           }
           if (newStatus !== c.status) {
             changed = true;
-            return { ...c, status: newStatus };
+            return { ...c, status: newStatus, updatedAt: new Date().toISOString() };
+          }
+          return c;
+        });
+        if (changed) {
+          set({ longTermContracts: updated });
+        }
+      },
+
+      updatePaymentRecordStatuses: () => {
+        const { longTermContracts } = get();
+        const today = todayStr();
+        let changed = false;
+        const updated = longTermContracts.map((c) => {
+          if (c.status === 'cancelled') return c;
+          let contractChanged = false;
+          const newRecords = c.paymentRecords.map((p) => {
+            if (p.status === 'pending' && p.dueDate < today) {
+              contractChanged = true;
+              return { ...p, status: 'overdue' as const, updatedAt: new Date().toISOString() };
+            }
+            return p;
+          });
+          if (contractChanged) {
+            changed = true;
+            return { ...c, paymentRecords: newRecords, updatedAt: new Date().toISOString() };
           }
           return c;
         });

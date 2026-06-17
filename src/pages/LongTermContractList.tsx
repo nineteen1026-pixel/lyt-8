@@ -30,6 +30,7 @@ export default function LongTermContractList() {
     getExpiringContracts,
     getOverduePayments,
     updateLongTermContractStatuses,
+    updatePaymentRecordStatuses,
   } = useAppStore();
 
   const canCreate = hasPermission('longterm:create');
@@ -67,7 +68,8 @@ export default function LongTermContractList() {
 
   useEffect(() => {
     updateLongTermContractStatuses();
-  }, [updateLongTermContractStatuses]);
+    updatePaymentRecordStatuses();
+  }, [updateLongTermContractStatuses, updatePaymentRecordStatuses]);
 
   const filteredRooms = useMemo(() => {
     let list = getRoomsByStore(storeFilter);
@@ -264,6 +266,110 @@ export default function LongTermContractList() {
           </div>
         </div>
       </div>
+
+      {(expiringContracts.length > 0 || overduePayments.length > 0) && (
+        <div className="card-base p-6 mb-5 border-l-4 border-amber-400">
+          <h2 className="font-display text-lg font-semibold text-brand-brown mb-4 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            续签与收款提醒
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {expiringContracts.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-amber-700 mb-3 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4" />
+                  即将到期合同 ({expiringContracts.length})
+                </h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {expiringContracts.slice(0, 10).map((c) => {
+                    const info = getContractExpiryInfo(c.id);
+                    const room = getRoomById(c.roomId);
+                    const isUrgent = info?.alertLevel === 'urgent';
+                    return (
+                      <div
+                        key={c.id}
+                        className={`p-3 rounded-lg border flex items-center justify-between ${
+                          isUrgent ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            isUrgent ? 'bg-red-100' : 'bg-amber-100'
+                          }`}>
+                            <FileText className={`w-4 h-4 ${isUrgent ? 'text-red-600' : 'text-amber-600'}`} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-brand-brown text-sm truncate">
+                              {room?.roomNumber} {c.guestName}
+                            </div>
+                            <div className="text-xs text-brand-taupe">
+                              到期：{formatDateDisplay(c.endDate)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            isUrgent ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {info?.daysRemaining}天
+                          </span>
+                          {canRenew && isUrgent && (
+                            <button
+                              onClick={() => handleOpenRenew(c)}
+                              className="text-xs px-2 py-1 rounded-lg bg-brand-green/20 text-brand-green hover:bg-brand-green/30 transition-colors flex items-center gap-1"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              续签
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {overduePayments.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-red-700 mb-3 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4" />
+                  逾期待收租金 ({overduePayments.length})
+                </h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {overduePayments.slice(0, 10).map((p) => {
+                    const contract = storeContracts.find((c) => c.id === p.contractId);
+                    if (!contract) return null;
+                    const room = getRoomById(contract.roomId);
+                    return (
+                      <div
+                        key={p.id}
+                        className="p-3 rounded-lg border bg-red-50 border-red-200 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                            <CreditCard className="w-4 h-4 text-red-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-brand-brown text-sm truncate">
+                              {room?.roomNumber} {contract.guestName}
+                            </div>
+                            <div className="text-xs text-brand-taupe">
+                              {p.period} · 应收 ¥{p.amount} · 已收 ¥{p.paidAmount}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium flex-shrink-0">
+                          逾期
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="card-base p-4 mb-5">
         <div className="flex flex-col md:flex-row gap-4">
