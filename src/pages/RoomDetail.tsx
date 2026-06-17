@@ -19,7 +19,6 @@ import {
   RoomTypeLabels,
   BedTypeLabels,
   RoomStatusLabels,
-  CommonFacilities,
 } from '@/types';
 import Badge from '@/components/Badge';
 import RoomForm from './RoomForm';
@@ -95,8 +94,6 @@ export default function RoomDetail() {
   const handleSubmit = (data: Omit<Room, 'id' | 'createdAt' | 'updatedAt'>) => {
     updateRoom(room.id, data);
   };
-
-  const isFacilityAvailable = (facility: string) => room.facilities.includes(facility);
 
   return (
     <div className="animate-fade-in">
@@ -227,27 +224,16 @@ export default function RoomDetail() {
                 ({room.facilities.length} 项)
               </span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {CommonFacilities.map((facility) => {
-                const available = isFacilityAvailable(facility);
-                return (
-                  <div
-                    key={facility}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-lg ${
-                      available
-                        ? 'bg-brand-green/10 text-brand-green'
-                        : 'bg-gray-50 text-gray-400'
-                    }`}
-                  >
-                    <div
-                      className={`w-2 h-2 rounded-full ${
-                        available ? 'bg-brand-green' : 'bg-gray-300'
-                      }`}
-                    />
-                    <span className="text-sm">{facility}</span>
-                  </div>
-                );
-              })}
+            <div className="flex flex-wrap gap-2">
+              {room.facilities.map((f) => (
+                <span
+                  key={f}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-brand-green/10 text-brand-green"
+                >
+                  <span className="w-2 h-2 rounded-full bg-brand-green" />
+                  {f}
+                </span>
+              ))}
             </div>
           </div>
         </div>
