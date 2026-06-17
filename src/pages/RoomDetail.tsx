@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -37,6 +37,16 @@ export default function RoomDetail() {
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  const images = room?.images || [];
+
+  useEffect(() => {
+    if (images.length === 0) {
+      setCurrentImageIndex(0);
+    } else if (currentImageIndex >= images.length) {
+      setCurrentImageIndex(images.length - 1);
+    }
+  }, [images.length, currentImageIndex]);
+
   if (!room) {
     return (
       <div className="animate-fade-in">
@@ -57,8 +67,7 @@ export default function RoomDetail() {
   const activeBookings = getBookingsByRoom(room.id).filter(
     (b) => b.status !== 'cancelled' && b.status !== 'checked-out'
   );
-  const hasImages = room.images && room.images.length > 0;
-  const images = room.images || [];
+  const hasImages = images.length > 0;
 
   const getStatusBadge = (status: Room['status']) => {
     switch (status) {

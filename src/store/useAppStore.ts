@@ -245,6 +245,16 @@ export const useAppStore = create<AppState>()(
             }));
             set({ longTermContracts: normalized });
           }
+          const hasMissingImages = rooms.some(
+            (r) => !r.images
+          );
+          if (hasMissingImages) {
+            const migratedRooms = rooms.map((r) => ({
+              ...r,
+              images: r.images || [],
+            }));
+            set({ rooms: migratedRooms });
+          }
           expireOldWaitlistEntries();
           updateLongTermContractStatuses();
           updatePaymentRecordStatuses();

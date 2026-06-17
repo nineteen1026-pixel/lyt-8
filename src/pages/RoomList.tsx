@@ -250,19 +250,15 @@ export default function RoomList() {
                         设施配备
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {room.facilities.slice(0, 5).map((f) => (
+                        {room.facilities.map((f) => (
                           <span
                             key={f}
-                            className="px-2 py-0.5 text-xs bg-brand-beige text-brand-taupe rounded"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded"
                           >
-                            {f}
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand-green" />
+                            <span className="text-brand-green">{f}</span>
                           </span>
                         ))}
-                        {room.facilities.length > 5 && (
-                          <span className="px-2 py-0.5 text-xs bg-brand-beige text-brand-taupe rounded">
-                            +{room.facilities.length - 5}
-                          </span>
-                        )}
                       </div>
                     </div>
                   )}
