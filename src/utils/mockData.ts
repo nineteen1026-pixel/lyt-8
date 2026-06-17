@@ -224,6 +224,14 @@ export function getInitialStores(): Store[] {
   ];
 }
 
+function createRoomImages(prompts: string[], size: string = 'landscape_16_9') {
+  return prompts.map((prompt, idx) => ({
+    id: generateId(),
+    url: `https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(prompt)}&image_size=${size}`,
+    name: `房间图片${idx + 1}`,
+  }));
+}
+
 export function getInitialRooms(stores: Store[]): Room[] {
   if (stores.length === 0) return [];
   const now = new Date().toISOString();
@@ -241,6 +249,10 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'double',
       capacity: 2,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机'],
+      images: createRoomImages([
+        '温馨舒适的民宿标准间卧室，木质双人床，暖色灯光，中式简约风格，窗外绿植',
+        '中式民宿独立卫浴间，白色瓷砖，淋浴区，整洁明亮',
+      ]),
       description: '温馨舒适的标准间，配备一张双人床，适合情侣或闺蜜出行。',
       status: 'active',
       createdAt: now,
@@ -256,6 +268,10 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'twin',
       capacity: 2,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '阳台'],
+      images: createRoomImages([
+        '民宿双床标准间，两张单人床，原木色家具，明亮自然采光',
+        '民宿小阳台，木质桌椅，远处山景，蓝天白云，宁静惬意',
+      ]),
       description: '带独立阳台的标准间，两张单人床，适合朋友同住。',
       status: 'active',
       createdAt: now,
@@ -271,6 +287,11 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'king',
       capacity: 2,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '山景', '保险箱'],
+      images: createRoomImages([
+        '豪华民宿大床房，超大落地窗，远山美景，精致软装，暖色台灯',
+        '豪华民宿卧室全景，KING SIZE大床，地毯，沙发区，高档装修',
+        '山景民宿落地窗景观，连绵青山，云雾缭绕，自然风光',
+      ]),
       description: '豪华大床房，全景落地窗，可欣赏远山美景。',
       status: 'active',
       createdAt: now,
@@ -286,6 +307,11 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'king',
       capacity: 2,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '海景', '阳台', '咖啡机'],
+      images: createRoomImages([
+        '海景豪华民宿卧室，蓝白配色，面朝大海，落地窗，阳台门',
+        '海景民宿阳台，藤编休闲椅，小茶几，无敌海景，阳光明媚',
+        '豪华民宿咖啡机区域，意式咖啡机，精致咖啡杯，现代简约',
+      ]),
       description: '豪华海景房，面朝大海，春暖花开。配备独立阳台和咖啡机。',
       status: 'active',
       createdAt: now,
@@ -301,6 +327,10 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'double',
       capacity: 2,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '海景'],
+      images: createRoomImages([
+        '海景民宿标准间，侧边窗户看海，温馨双人床，蓝白主题装饰',
+        '从民宿窗户望出去的海景，蓝色大海，白色浪花，宁静海岸',
+      ]),
       description: '侧海景标准间，躺在床上就能听到海浪声。',
       status: 'active',
       createdAt: now,
@@ -316,6 +346,12 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'king',
       capacity: 2,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '海景', '阳台', '保险箱', '咖啡机', '冰箱', '拖鞋'],
+      images: createRoomImages([
+        '顶级海景民宿套房客厅，现代奢华装修，沙发，茶几，全景落地窗',
+        '海景套房卧室，超大床，浪漫纱幔，阳台直通海边',
+        '超大观海阳台，户外躺椅，遮阳伞，无边泳池般的海景',
+        '海上日出景观，金色阳光，波光粼粼，从阳台观赏',
+      ]),
       description: '顶级海景套房，独立起居室和卧室，超大观海阳台，尊享品质体验。',
       status: 'active',
       createdAt: now,
@@ -331,6 +367,12 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'king',
       capacity: 2,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '山景', '阳台', '保险箱', '咖啡机', '冰箱', '拖鞋'],
+      images: createRoomImages([
+        '竹林山景民宿套房，新中式风格，木质家具，雅致装饰',
+        '套房独立起居室，沙发，茶具，落地窗看竹海',
+        '民宿豪华卫浴间，大浴缸，石材装修，竹林景观窗',
+        '山景阳台，竹编桌椅，翠绿竹海环绕',
+      ]),
       description: '顶级套房，独立起居室和卧室，配备大浴缸，尊享品质体验。',
       status: 'active',
       createdAt: now,
@@ -346,6 +388,10 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'double',
       capacity: 4,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '冰箱', '拖鞋'],
+      images: createRoomImages([
+        '温馨家庭民宿房间，一张大床加两张小床，卡通装饰，亲子友好',
+        '家庭民宿客厅区域，小沙发，儿童玩具，书架，温馨家庭氛围',
+      ]),
       description: '温馨家庭房，一张双人床+两张单人床，适合全家出行。',
       status: 'active',
       createdAt: now,
@@ -361,6 +407,10 @@ export function getInitialRooms(stores: Store[]): Room[] {
       bedType: 'king',
       capacity: 2,
       facilities: ['WiFi', '空调', '电视', '独立卫浴', '24小时热水', '吹风机', '洗漱用品', '迷你吧', '山景', '阳台'],
+      images: createRoomImages([
+        '竹林景观豪华民宿客房，推窗见翠竹，新中式禅意风格',
+        '竹林景观阳台，茶桌，蒲团，翠绿竹海扑面而来',
+      ]),
       description: '竹林景观豪华房，推窗即见翠绿竹海。',
       status: 'active',
       createdAt: now,

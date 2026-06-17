@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Layout from '@/components/Layout';
 import Dashboard from '@/pages/Dashboard';
 import RoomList from '@/pages/RoomList';
+import RoomDetail from '@/pages/RoomDetail';
 import Calendar from '@/pages/Calendar';
 import BookingList from '@/pages/BookingList';
 import WaitlistList from '@/pages/WaitlistList';
@@ -48,6 +49,14 @@ export default function App() {
             element={
               <ProtectedRoute permission="room:view">
                 <RoomList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/rooms/:id"
+            element={
+              <ProtectedRoute permission="room:view">
+                <RoomDetail />
               </ProtectedRoute>
             }
           />

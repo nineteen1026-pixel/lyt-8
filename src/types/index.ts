@@ -217,6 +217,12 @@ export interface Store {
   updatedAt: string;
 }
 
+export interface RoomImage {
+  id: string;
+  url: string;
+  name: string;
+}
+
 export interface Room {
   id: string;
   storeId: string;
@@ -227,6 +233,7 @@ export interface Room {
   bedType: BedType;
   capacity: number;
   facilities: string[];
+  images: RoomImage[];
   description: string;
   status: RoomStatus;
   createdAt: string;

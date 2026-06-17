@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Users, BedDouble, Wifi, DollarSign, Building2, Filter, Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Pencil, Trash2, Users, BedDouble, Wifi, DollarSign, Building2, Filter, Calendar, Image as ImageIcon, ChevronRight } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Room } from '@/types';
 import { RoomTypeLabels, BedTypeLabels, RoomStatusLabels } from '@/types';
@@ -9,6 +10,7 @@ import RoomForm from './RoomForm';
 import RoomRulesModal from './RoomRulesModal';
 
 export default function RoomList() {
+  const navigate = useNavigate();
   const { stores, getRoomsByStore, addRoom, updateRoom, deleteRoom, getBookingsByRoom, getStoreById, hasPermission } = useAppStore();
   const canCreateRoom = hasPermission('room:create');
   const canUpdateRoom = hasPermission('room:update');
@@ -139,113 +141,150 @@ export default function RoomList() {
             const activeBookings = getBookingsByRoom(room.id).filter(
               (b) => b.status !== 'cancelled' && b.status !== 'checked-out'
             ).length;
+            const hasImages = room.images && room.images.length > 0;
+            const coverImage = hasImages ? room.images![0] : null;
 
             return (
               <div
                 key={room.id}
-                className="card-base p-5 hover:shadow-card transition-all duration-300 hover:-translate-y-0.5 animate-slide-up"
+                className="card-base hover:shadow-card transition-all duration-300 hover:-translate-y-0.5 animate-slide-up overflow-hidden flex flex-col cursor-pointer"
                 style={{ animationDelay: `${idx * 50}ms` }}
+                onClick={() => navigate(`/rooms/${room.id}`)}
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-display text-2xl font-bold text-brand-brown">
-                        {room.roomNumber}
-                      </span>
+                {coverImage ? (
+                  <div className="relative h-48 overflow-hidden">
+                    <img
+                      src={coverImage.url}
+                      alt={room.name}
+                      className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                    />
+                    <div className="absolute top-3 left-3">
                       {getStatusBadge(room.status)}
                     </div>
-                    <h3 className="text-lg font-medium text-gray-800">{room.name}</h3>
-                    <div className="flex items-center gap-1 text-xs text-brand-taupe mt-1">
-                      <Building2 className="w-3 h-3" />
-                      {storeName(room.storeId)}
+                    {room.images!.length > 1 && (
+                      <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/60 text-white text-xs rounded-lg flex items-center gap-1">
+                        <ImageIcon className="w-3 h-3" />
+                        {room.images!.length}张
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="h-48 bg-gradient-to-br from-brand-beige to-brand-cream flex items-center justify-center relative">
+                    <div className="text-center">
+                      <ImageIcon className="w-12 h-12 mx-auto text-brand-brown/30 mb-2" />
+                      <p className="text-sm text-brand-taupe/60">暂无图片</p>
+                    </div>
+                    <div className="absolute top-3 left-3">
+                      {getStatusBadge(room.status)}
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    {canManageRoomRules && (
-                      <button
-                        onClick={() => handleOpenRules(room)}
-                        className="p-2 rounded-lg text-brand-taupe hover:bg-brand-sage/20 hover:text-brand-green transition-colors"
-                        title="房间规则"
-                      >
-                        <Calendar className="w-4 h-4" />
-                      </button>
-                    )}
-                    {canUpdateRoom && (
-                      <button
-                        onClick={() => handleEdit(room)}
-                        className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
-                        title="编辑"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                    )}
-                    {canDeleteRoom && (
-                      <button
-                        onClick={() => handleDeleteClick(room)}
-                        className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
-                        title="删除"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
+                )}
 
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-4 text-sm text-brand-taupe">
-                    <span className="flex items-center gap-1">
-                      <BedDouble className="w-4 h-4" />
-                      {RoomTypeLabels[room.type]} · {BedTypeLabels[room.bedType]}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-4 h-4" />
-                      可住{room.capacity}人
-                    </span>
-                  </div>
-                  {activeBookings > 0 && (
-                    <div className="text-sm text-brand-orange">
-                      当前有 {activeBookings} 个有效预订
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-display text-2xl font-bold text-brand-brown">
+                          {room.roomNumber}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-800">{room.name}</h3>
+                      <div className="flex items-center gap-1 text-xs text-brand-taupe mt-1">
+                        <Building2 className="w-3 h-3" />
+                        {storeName(room.storeId)}
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                {room.facilities.length > 0 && (
-                  <div className="mb-4">
-                    <div className="flex items-center gap-1 text-xs text-brand-taupe mb-2">
-                      <Wifi className="w-3.5 h-3.5" />
-                      设施配备
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {room.facilities.slice(0, 5).map((f) => (
-                        <span
-                          key={f}
-                          className="px-2 py-0.5 text-xs bg-brand-beige text-brand-taupe rounded"
+                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      {canManageRoomRules && (
+                        <button
+                          onClick={() => handleOpenRules(room)}
+                          className="p-2 rounded-lg text-brand-taupe hover:bg-brand-sage/20 hover:text-brand-green transition-colors"
+                          title="房间规则"
                         >
-                          {f}
-                        </span>
-                      ))}
-                      {room.facilities.length > 5 && (
-                        <span className="px-2 py-0.5 text-xs bg-brand-beige text-brand-taupe rounded">
-                          +{room.facilities.length - 5}
-                        </span>
+                          <Calendar className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canUpdateRoom && (
+                        <button
+                          onClick={() => handleEdit(room)}
+                          className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                          title="编辑"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canDeleteRoom && (
+                        <button
+                          onClick={() => handleDeleteClick(room)}
+                          className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
+                          title="删除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       )}
                     </div>
                   </div>
-                )}
 
-                {room.description && (
-                  <p className="text-sm text-brand-taupe/80 line-clamp-2 mb-4">
-                    {room.description}
-                  </p>
-                )}
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-center gap-4 text-sm text-brand-taupe">
+                      <span className="flex items-center gap-1">
+                        <BedDouble className="w-4 h-4" />
+                        {RoomTypeLabels[room.type]} · {BedTypeLabels[room.bedType]}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        可住{room.capacity}人
+                      </span>
+                    </div>
+                    {activeBookings > 0 && (
+                      <div className="text-sm text-brand-orange">
+                        当前有 {activeBookings} 个有效预订
+                      </div>
+                    )}
+                  </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-brand-brown/10">
-                  <div className="flex items-baseline gap-1">
-                    <DollarSign className="w-4 h-4 text-brand-orange" />
-                    <span className="font-display text-xl font-bold text-brand-orange">
-                      {room.price}
-                    </span>
-                    <span className="text-xs text-brand-taupe">/晚</span>
+                  {room.facilities.length > 0 && (
+                    <div className="mb-3">
+                      <div className="flex items-center gap-1 text-xs text-brand-taupe mb-2">
+                        <Wifi className="w-3.5 h-3.5" />
+                        设施配备
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {room.facilities.slice(0, 5).map((f) => (
+                          <span
+                            key={f}
+                            className="px-2 py-0.5 text-xs bg-brand-beige text-brand-taupe rounded"
+                          >
+                            {f}
+                          </span>
+                        ))}
+                        {room.facilities.length > 5 && (
+                          <span className="px-2 py-0.5 text-xs bg-brand-beige text-brand-taupe rounded">
+                            +{room.facilities.length - 5}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {room.description && (
+                    <p className="text-sm text-brand-taupe/80 line-clamp-2 mb-3">
+                      {room.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-3 border-t border-brand-brown/10 mt-auto">
+                    <div className="flex items-baseline gap-1">
+                      <DollarSign className="w-4 h-4 text-brand-orange" />
+                      <span className="font-display text-xl font-bold text-brand-orange">
+                        {room.price}
+                      </span>
+                      <span className="text-xs text-brand-taupe">/晚</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm text-brand-brown/60">
+                      查看详情
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
               </div>

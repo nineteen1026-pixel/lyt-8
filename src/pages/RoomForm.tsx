@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import type { Room, RoomType, BedType, RoomStatus } from '@/types';
+import { useState, useEffect, useRef } from 'react';
+import type { Room, RoomType, BedType, RoomStatus, RoomImage } from '@/types';
 import {
   RoomTypeLabels,
   BedTypeLabels,
@@ -8,6 +8,8 @@ import {
 } from '@/types';
 import Modal from '@/components/Modal';
 import { useAppStore } from '@/store/useAppStore';
+import { generateId } from '@/utils/date';
+import { Upload, X, Image as ImageIcon } from 'lucide-react';
 
 interface RoomFormProps {
   open: boolean;
@@ -18,6 +20,7 @@ interface RoomFormProps {
 
 export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProps) {
   const { stores } = useAppStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     storeId: '',
     roomNumber: '',
@@ -27,6 +30,7 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
     bedType: 'double' as BedType,
     capacity: 2,
     facilities: [] as string[],
+    images: [] as RoomImage[],
     description: '',
     status: 'active' as RoomStatus,
   });
@@ -44,6 +48,7 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
         bedType: room.bedType,
         capacity: room.capacity,
         facilities: [...room.facilities],
+        images: [...(room.images || [])],
         description: room.description,
         status: room.status,
       });
@@ -57,6 +62,7 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
         bedType: 'double',
         capacity: 2,
         facilities: [],
+        images: [],
         description: '',
         status: 'active',
       });
@@ -88,6 +94,43 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
       facilities: prev.facilities.includes(facility)
         ? prev.facilities.filter((f) => f !== facility)
         : [...prev.facilities, facility],
+    }));
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const url = event.target?.result as string;
+        if (url) {
+          const newImage: RoomImage = {
+            id: generateId(),
+            url,
+            name: file.name,
+          };
+          setFormData((prev) => ({
+            ...prev,
+            images: [...prev.images, newImage],
+          }));
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = (imageId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      images: prev.images.filter((img) => img.id !== imageId),
     }));
   };
 
@@ -242,6 +285,51 @@ export default function RoomForm({ open, onClose, onSubmit, room }: RoomFormProp
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="label-base">房间图片</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+          {formData.images.length > 0 && (
+            <div className="grid grid-cols-4 gap-3 mb-3">
+              {formData.images.map((img) => (
+                <div key={img.id} className="relative group aspect-square rounded-lg overflow-hidden border border-brand-brown/10">
+                  <img
+                    src={img.url}
+                    alt={img.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage(img.id)}
+                    className="absolute top-1 right-1 p-1 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full py-8 border-2 border-dashed border-brand-brown/20 rounded-xl text-brand-taupe hover:border-brand-brown/40 hover:bg-brand-beige/50 transition-all flex flex-col items-center justify-center gap-2"
+          >
+            <Upload className="w-6 h-6" />
+            <span className="text-sm">
+              {formData.images.length > 0 ? '继续添加图片' : '点击上传房间图片'}
+            </span>
+            {formData.images.length > 0 && (
+              <span className="text-xs text-brand-taupe/70">已上传 {formData.images.length} 张图片</span>
+            )}
+          </button>
         </div>
 
         <div>
