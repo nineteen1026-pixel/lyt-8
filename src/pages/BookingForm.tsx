@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import { useAppStore } from '@/store/useAppStore';
 import { calculateNights, todayStr } from '@/utils/date';
 import { addDays, format } from 'date-fns';
-import { Building2, Clock, Ban } from 'lucide-react';
+import { Building2, Clock, Ban, ListTodo, AlertCircle } from 'lucide-react';
 
 interface BookingFormProps {
   open: boolean;
@@ -14,6 +14,9 @@ interface BookingFormProps {
     data: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>,
     isEdit: boolean
   ) => boolean;
+  onWaitlistSubmit?: (
+    data: Omit<import('@/types').WaitlistEntry, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'priority'>
+  ) => void;
   booking?: Booking | null;
   prefillRoomId?: string;
   prefillCheckIn?: string;
@@ -24,13 +27,15 @@ export default function BookingForm({
   open,
   onClose,
   onSubmit,
+  onWaitlistSubmit,
   booking,
   prefillRoomId,
   prefillCheckIn,
   prefillCheckOut,
 }: BookingFormProps) {
-  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById, getMinStayForRoom, checkMinStayCompliance, hasClosedDateInRange } = useAppStore();
+  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById, getMinStayForRoom, checkMinStayCompliance, hasClosedDateInRange, hasPermission, addWaitlistEntry } = useAppStore();
   const activeRooms = rooms.filter((r) => r.status === 'active');
+  const canCreateWaitlist = hasPermission('waitlist:create');
 
   const [formData, setFormData] = useState({
     roomId: '',
@@ -48,6 +53,7 @@ export default function BookingForm({
   const [storeFilter, setStoreFilter] = useState<string>('all');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isWaitlistMode, setIsWaitlistMode] = useState(false);
 
   const roomsByStore = useMemo(() => {
     if (storeFilter === 'all') return activeRooms;
@@ -91,6 +97,7 @@ export default function BookingForm({
     }
     setErrors({});
     setSubmitError(null);
+    setIsWaitlistMode(false);
   }, [booking, prefillRoomId, prefillCheckIn, prefillCheckOut, open]);
 
   useEffect(() => {
@@ -129,11 +136,15 @@ export default function BookingForm({
     if (formData.guests <= 0) newErrors.guests = '请输入入住人数';
 
     if (formData.roomId && formData.checkIn && formData.checkOut && nights > 0) {
-      if (!isRoomAvailable(formData.roomId, formData.checkIn, formData.checkOut, booking?.id)) {
+      if (!isWaitlistMode && !isRoomAvailable(formData.roomId, formData.checkIn, formData.checkOut, booking?.id)) {
         if (hasClosedDateInRange(formData.roomId, formData.checkIn, formData.checkOut)) {
           newErrors.roomId = '该房间在此时间段内存在禁订日期，无法预订';
         } else {
-          newErrors.roomId = '该房间在此时间段已被预订';
+          if (canCreateWaitlist && !booking) {
+            newErrors.roomId = '该房间在此时间段已被预订，可选择加入候补队列';
+          } else {
+            newErrors.roomId = '该房间在此时间段已被预订';
+          }
         }
       }
 
@@ -147,9 +158,58 @@ export default function BookingForm({
     return Object.keys(newErrors).length === 0;
   };
 
+  const isRoomUnavailable = useMemo(() => {
+    if (booking) return false;
+    if (!formData.roomId || !formData.checkIn || !formData.checkOut) return false;
+    if (nights <= 0) return false;
+    if (hasClosedDateInRange(formData.roomId, formData.checkIn, formData.checkOut)) return false;
+    return !isRoomAvailable(formData.roomId, formData.checkIn, formData.checkOut);
+  }, [formData.roomId, formData.checkIn, formData.checkOut, booking, nights, isRoomAvailable, hasClosedDateInRange]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+
+    if (isWaitlistMode) {
+      const basicErrors: Record<string, string> = {};
+      if (!formData.roomId) basicErrors.roomId = '请选择房间';
+      if (!formData.guestName.trim()) basicErrors.guestName = '请输入客人姓名';
+      if (!formData.guestPhone.trim()) basicErrors.guestPhone = '请输入联系电话';
+      if (!formData.checkIn) basicErrors.checkIn = '请选择入住日期';
+      if (!formData.checkOut) basicErrors.checkOut = '请选择退房日期';
+      if (formData.checkIn && formData.checkOut && nights <= 0) {
+        basicErrors.checkOut = '退房日期必须晚于入住日期';
+      }
+      if (formData.guests <= 0) basicErrors.guests = '请输入入住人数';
+      if (formData.checkIn < todayStr()) {
+        basicErrors.checkIn = '入住日期不能早于今天';
+      }
+      setErrors(basicErrors);
+      if (Object.keys(basicErrors).length > 0) return;
+
+      const waitlistData = {
+        roomId: formData.roomId,
+        guestName: formData.guestName.trim(),
+        guestPhone: normalizePhone(formData.guestPhone),
+        guestIdCard: formData.guestIdCard.trim() || undefined,
+        checkIn: formData.checkIn,
+        checkOut: formData.checkOut,
+        guests: formData.guests,
+        notes: formData.notes.trim() || undefined,
+      };
+
+      const result = addWaitlistEntry(waitlistData);
+      if (result) {
+        if (onWaitlistSubmit) {
+          onWaitlistSubmit(waitlistData);
+        }
+        onClose();
+      } else {
+        setSubmitError('候补登记失败，请检查信息后重试。');
+      }
+      return;
+    }
+
     if (!validate()) return;
 
     const submitData: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -184,6 +244,49 @@ export default function BookingForm({
         {submitError && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
             {submitError}
+          </div>
+        )}
+
+        {!booking && isRoomUnavailable && canCreateWaitlist && (
+          <div className={`p-4 rounded-lg border ${isWaitlistMode ? 'bg-amber-50 border-amber-200' : 'bg-amber-50/50 border-amber-200/50'}`}>
+            <div className="flex items-start gap-3">
+              <AlertCircle className={`w-5 h-5 ${isWaitlistMode ? 'text-amber-600' : 'text-amber-500'} flex-shrink-0 mt-0.5`} />
+              <div className="flex-1">
+                <div className={`font-medium ${isWaitlistMode ? 'text-amber-800' : 'text-amber-700'}`}>
+                  {isWaitlistMode ? '候补登记模式' : '该时段房间已满'}
+                </div>
+                <div className={`text-sm mt-1 ${isWaitlistMode ? 'text-amber-700' : 'text-amber-600'}`}>
+                  {isWaitlistMode
+                    ? '正在为客人登记候补意向，有空房时将自动匹配并通知确认。'
+                    : '您可以选择将客人加入候补队列，当有空房时系统会自动匹配并通知客人确认预订。'}
+                </div>
+                {!isWaitlistMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsWaitlistMode(true);
+                      setErrors({});
+                    }}
+                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    <ListTodo className="w-4 h-4" />
+                    加入候补队列
+                  </button>
+                )}
+                {isWaitlistMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsWaitlistMode(false);
+                      setErrors({});
+                    }}
+                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-white border border-amber-300 text-amber-700 text-sm font-medium rounded-lg hover:bg-amber-50 transition-colors"
+                  >
+                    返回正常预订
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -388,8 +491,13 @@ export default function BookingForm({
           <button type="button" onClick={onClose} className="btn-secondary">
             取消
           </button>
-          <button type="submit" className="btn-primary">
-            {booking ? '保存修改' : '确认预订'}
+          <button type="submit" className={isWaitlistMode ? 'btn-primary !bg-amber-500 hover:!bg-amber-600' : 'btn-primary'}>
+            {booking ? '保存修改' : isWaitlistMode ? (
+              <>
+                <ListTodo className="w-4 h-4" />
+                确认候补登记
+              </>
+            ) : '确认预订'}
           </button>
         </div>
       </form>

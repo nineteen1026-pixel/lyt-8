@@ -31,6 +31,11 @@ export type Permission =
   | 'booking:cancel'
   | 'booking:checkin'
   | 'booking:checkout'
+  | 'waitlist:view'
+  | 'waitlist:create'
+  | 'waitlist:update'
+  | 'waitlist:cancel'
+  | 'waitlist:confirm'
   | 'guest:view'
   | 'cleaning:view'
   | 'cleaning:update'
@@ -62,6 +67,11 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'booking:cancel',
     'booking:checkin',
     'booking:checkout',
+    'waitlist:view',
+    'waitlist:create',
+    'waitlist:update',
+    'waitlist:cancel',
+    'waitlist:confirm',
     'guest:view',
     'cleaning:view',
     'cleaning:update',
@@ -86,6 +96,11 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'booking:cancel',
     'booking:checkin',
     'booking:checkout',
+    'waitlist:view',
+    'waitlist:create',
+    'waitlist:update',
+    'waitlist:cancel',
+    'waitlist:confirm',
     'guest:view',
     'cleaning:view',
     'cleaning:update',
@@ -118,6 +133,12 @@ export type AuditAction =
   | 'booking:cancel'
   | 'booking:checkin'
   | 'booking:checkout'
+  | 'waitlist:create'
+  | 'waitlist:update'
+  | 'waitlist:cancel'
+  | 'waitlist:match'
+  | 'waitlist:confirm'
+  | 'waitlist:expire'
   | 'cleaning:update'
   | 'user:switch';
 
@@ -139,6 +160,12 @@ export const AuditActionLabels: Record<AuditAction, string> = {
   'booking:cancel': '取消预订',
   'booking:checkin': '办理入住',
   'booking:checkout': '办理退房',
+  'waitlist:create': '新增候补登记',
+  'waitlist:update': '更新候补登记',
+  'waitlist:cancel': '取消候补登记',
+  'waitlist:match': '候补匹配成功',
+  'waitlist:confirm': '候补确认预订',
+  'waitlist:expire': '候补登记过期',
   'cleaning:update': '更新保洁',
   'user:switch': '切换角色',
 };
@@ -376,3 +403,60 @@ export const CleaningTaskStatusColors: Record<CleaningTaskStatus, string> = {
   'in-progress': 'bg-blue-100 text-blue-700',
   completed: 'bg-green-100 text-green-700',
 };
+
+export type WaitlistStatus = 'waiting' | 'matched' | 'confirmed' | 'cancelled' | 'expired';
+
+export interface WaitlistEntry {
+  id: string;
+  roomId: string;
+  roomTypeId?: RoomType;
+  guestName: string;
+  guestPhone: string;
+  guestIdCard?: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  notes?: string;
+  status: WaitlistStatus;
+  priority: number;
+  matchedRoomId?: string;
+  matchedBookingId?: string;
+  notifiedAt?: string;
+  confirmedAt?: string;
+  expiredAt?: string;
+  cancelReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const WaitlistStatusLabels: Record<WaitlistStatus, string> = {
+  waiting: '等待中',
+  matched: '已匹配待确认',
+  confirmed: '已确认预订',
+  cancelled: '已取消',
+  expired: '已过期',
+};
+
+export const WaitlistStatusColors: Record<WaitlistStatus, string> = {
+  waiting: 'bg-amber-100 text-amber-700',
+  matched: 'bg-blue-100 text-blue-700',
+  confirmed: 'bg-green-100 text-green-700',
+  cancelled: 'bg-gray-100 text-gray-600',
+  expired: 'bg-red-100 text-red-600',
+};
+
+export interface WaitlistNotification {
+  id: string;
+  waitlistId: string;
+  guestName: string;
+  guestPhone: string;
+  message: string;
+  roomNumber?: string;
+  checkIn: string;
+  checkOut: string;
+  totalPrice?: number;
+  createdAt: string;
+  read: boolean;
+  confirmed: boolean;
+  confirmedAt?: string;
+}

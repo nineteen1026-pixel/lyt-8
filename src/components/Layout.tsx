@@ -15,6 +15,7 @@ import {
   User as UserIcon,
   Shield,
   Crown,
+  ListTodo,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Permission } from '@/types';
@@ -33,6 +34,7 @@ const allNavItems: NavItem[] = [
   { path: '/rooms', label: '房间管理', icon: BedDouble, permission: 'room:view' },
   { path: '/calendar', label: '日历视图', icon: CalendarDays, permission: 'booking:view' },
   { path: '/bookings', label: '预订管理', icon: ClipboardList, permission: 'booking:view' },
+  { path: '/waitlist', label: '候补队列', icon: ListTodo, permission: 'waitlist:view' },
   { path: '/cleaning-tasks', label: '保洁工单', icon: Sparkles, permission: 'cleaning:view' },
   { path: '/guests', label: '客人档案', icon: Users, permission: 'guest:view' },
   { path: '/reports', label: '经营报表', icon: BarChart3, permission: 'report:view' },

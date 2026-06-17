@@ -23,6 +23,12 @@ const actionColorMap: Record<AuditAction, string> = {
   'booking:cancel': 'bg-red-100 text-red-700',
   'booking:checkin': 'bg-brand-green/20 text-brand-green',
   'booking:checkout': 'bg-amber-100 text-amber-700',
+  'waitlist:create': 'bg-amber-100 text-amber-700',
+  'waitlist:update': 'bg-blue-100 text-blue-700',
+  'waitlist:cancel': 'bg-gray-100 text-gray-600',
+  'waitlist:match': 'bg-blue-100 text-blue-700',
+  'waitlist:confirm': 'bg-green-100 text-green-700',
+  'waitlist:expire': 'bg-red-100 text-red-600',
   'cleaning:update': 'bg-blue-100 text-blue-700',
   'user:switch': 'bg-purple-100 text-purple-700',
 };

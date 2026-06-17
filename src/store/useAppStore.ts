@@ -18,6 +18,9 @@ import type {
   Permission,
   AuditLog,
   AuditAction,
+  WaitlistEntry,
+  WaitlistStatus,
+  WaitlistNotification,
 } from '@/types';
 import { normalizePhone, RolePermissions, ClosedDateReasonLabels } from '@/types';
 import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
@@ -38,6 +41,8 @@ interface AppState {
   cleaningTasks: CleaningTask[];
   closedDates: ClosedDate[];
   minStayRules: MinStayRule[];
+  waitlistEntries: WaitlistEntry[];
+  waitlistNotifications: WaitlistNotification[];
   users: User[];
   currentUser: User;
   auditLogs: AuditLog[];
@@ -83,6 +88,21 @@ interface AppState {
   getAvailableRooms: (checkIn: string, checkOut: string, storeId?: StoreIdFilter) => Room[];
   getMinStayForRoom: (roomId: string, checkIn: string, checkOut: string) => number;
   checkMinStayCompliance: (roomId: string, checkIn: string, checkOut: string) => boolean;
+
+  addWaitlistEntry: (entry: Omit<WaitlistEntry, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'priority'>) => WaitlistEntry | null;
+  updateWaitlistEntry: (id: string, entry: Partial<WaitlistEntry>) => boolean;
+  cancelWaitlistEntry: (id: string, reason: string) => void;
+  getWaitlistById: (id: string) => WaitlistEntry | undefined;
+  getWaitlistByStore: (storeId: StoreIdFilter) => WaitlistEntry[];
+  getWaitlistByRoom: (roomId: string) => WaitlistEntry[];
+  getActiveWaitlistCount: (storeId?: StoreIdFilter) => number;
+  matchWaitlistToAvailability: (roomId?: string, checkIn?: string, checkOut?: string) => WaitlistEntry[];
+  confirmWaitlistBooking: (waitlistId: string) => Booking | null;
+  expireOldWaitlistEntries: () => void;
+
+  addWaitlistNotification: (notification: Omit<WaitlistNotification, 'id' | 'createdAt' | 'read' | 'confirmed'>) => void;
+  markNotificationRead: (id: string) => void;
+  getUnreadNotificationCount: () => number;
 
   addClosedDate: (closedDate: Omit<ClosedDate, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateClosedDate: (id: string, closedDate: Partial<ClosedDate>) => void;
@@ -146,13 +166,15 @@ export const useAppStore = create<AppState>()(
       cleaningTasks: [],
       closedDates: [],
       minStayRules: [],
+      waitlistEntries: [],
+      waitlistNotifications: [],
       users: defaultUsers,
       currentUser: defaultUsers[0],
       auditLogs: [],
       initialized: false,
 
       initializeData: () => {
-        const { initialized, rooms, bookings } = get();
+        const { initialized, rooms, bookings, expireOldWaitlistEntries } = get();
         if (initialized && rooms.length > 0) {
           const hasNonNormalized = bookings.some(
             (b) => b.guestPhone !== normalizePhone(b.guestPhone)
@@ -164,6 +186,7 @@ export const useAppStore = create<AppState>()(
             }));
             set({ bookings: normalizedBookings });
           }
+          expireOldWaitlistEntries();
           return;
         }
 
@@ -414,6 +437,7 @@ export const useAppStore = create<AppState>()(
         }));
         if (existing) {
           get().addAuditLog('booking:cancel', id, existing.guestName, `取消预订: ${existing.guestName} 原因: ${reason}`);
+          get().matchWaitlistToAvailability(existing.roomId, existing.checkIn, existing.checkOut);
         }
       },
 
@@ -546,6 +570,323 @@ export const useAppStore = create<AppState>()(
         const nights = calculateNights(checkIn, checkOut);
         const minNights = get().getMinStayForRoom(roomId, checkIn, checkOut);
         return nights >= minNights;
+      },
+
+      addWaitlistEntry: (entry) => {
+        if (!get().hasPermission('waitlist:create')) return null;
+        const now = new Date().toISOString();
+        const today = todayStr();
+
+        if (entry.checkIn < today) {
+          return null;
+        }
+
+        const state = get();
+        const sameDateEntries = state.waitlistEntries.filter(
+          (w) =>
+            w.status === 'waiting' &&
+            w.checkIn === entry.checkIn &&
+            w.checkOut === entry.checkOut
+        );
+        const priority = sameDateEntries.length + 1;
+
+        const newEntry: WaitlistEntry = {
+          ...entry,
+          guestPhone: normalizePhone(entry.guestPhone),
+          id: generateId(),
+          status: 'waiting',
+          priority,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        set((s) => ({ waitlistEntries: [...s.waitlistEntries, newEntry] }));
+        const room = get().getRoomById(entry.roomId);
+        get().addAuditLog(
+          'waitlist:create',
+          newEntry.id,
+          entry.guestName,
+          `新增候补登记: ${entry.guestName}(${entry.guestPhone}) 房间${room?.roomNumber || ''} ${entry.checkIn}~${entry.checkOut} 优先级:${priority}`
+        );
+        return newEntry;
+      },
+
+      updateWaitlistEntry: (id, entry) => {
+        if (!get().hasPermission('waitlist:update')) return false;
+        const state = get();
+        const existing = state.waitlistEntries.find((w) => w.id === id);
+        if (!existing) return false;
+
+        const now = new Date().toISOString();
+        const updateData = { ...entry };
+        if (updateData.guestPhone !== undefined) {
+          updateData.guestPhone = normalizePhone(updateData.guestPhone);
+        }
+
+        set((s) => ({
+          waitlistEntries: s.waitlistEntries.map((w) =>
+            w.id === id ? { ...w, ...updateData, updatedAt: now } : w
+          ),
+        }));
+
+        const changes: string[] = [];
+        if (entry.checkIn || entry.checkOut) changes.push(`日期变更`);
+        if (entry.guestName && entry.guestName !== existing.guestName) changes.push('客人姓名变更');
+        get().addAuditLog(
+          'waitlist:update',
+          id,
+          existing.guestName,
+          changes.length > 0
+            ? `更新候补登记: ${existing.guestName} ${changes.join('; ')}`
+            : `更新候补登记: ${existing.guestName}`
+        );
+        return true;
+      },
+
+      cancelWaitlistEntry: (id, reason) => {
+        if (!get().hasPermission('waitlist:cancel')) return;
+        const now = new Date().toISOString();
+        const existing = get().getWaitlistById(id);
+        set((state) => ({
+          waitlistEntries: state.waitlistEntries.map((w) =>
+            w.id === id
+              ? { ...w, status: 'cancelled', cancelReason: reason, updatedAt: now }
+              : w
+          ),
+        }));
+        if (existing) {
+          get().addAuditLog(
+            'waitlist:cancel',
+            id,
+            existing.guestName,
+            `取消候补登记: ${existing.guestName} 原因: ${reason}`
+          );
+        }
+      },
+
+      getWaitlistById: (id) => {
+        return get().waitlistEntries.find((w) => w.id === id);
+      },
+
+      getWaitlistByStore: (storeId) => {
+        const { waitlistEntries, getRoomsByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const roomIds = new Set(rooms.map((r) => r.id));
+        return waitlistEntries.filter((w) => roomIds.has(w.roomId));
+      },
+
+      getWaitlistByRoom: (roomId) => {
+        return get().waitlistEntries.filter((w) => w.roomId === roomId);
+      },
+
+      getActiveWaitlistCount: (storeId = 'all') => {
+        const entries = get().getWaitlistByStore(storeId);
+        return entries.filter((w) => w.status === 'waiting' || w.status === 'matched').length;
+      },
+
+      matchWaitlistToAvailability: (roomId, checkIn, checkOut) => {
+        if (!get().hasPermission('waitlist:confirm')) return [];
+        const state = get();
+        const now = new Date().toISOString();
+        const matchedEntries: WaitlistEntry[] = [];
+
+        let candidateEntries = state.waitlistEntries.filter(
+          (w) => w.status === 'waiting'
+        );
+
+        if (roomId) {
+          candidateEntries = candidateEntries.filter((w) => w.roomId === roomId);
+        }
+        if (checkIn && checkOut) {
+          candidateEntries = candidateEntries.filter(
+            (w) => isDateOverlap(w.checkIn, w.checkOut, checkIn, checkOut)
+          );
+        }
+
+        candidateEntries = candidateEntries.sort(
+          (a, b) => a.priority - b.priority || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+
+        for (const entry of candidateEntries) {
+          const availableRooms = state.getAvailableRooms(entry.checkIn, entry.checkOut);
+          const matchedRoom = availableRooms.find((r) => r.id === entry.roomId) || availableRooms[0];
+
+          if (matchedRoom) {
+            const room = state.getRoomById(entry.roomId);
+            const nights = calculateNights(entry.checkIn, entry.checkOut);
+            const totalPrice = matchedRoom.price * nights;
+
+            set((s) => ({
+              waitlistEntries: s.waitlistEntries.map((w) =>
+                w.id === entry.id
+                  ? {
+                      ...w,
+                      status: 'matched',
+                      matchedRoomId: matchedRoom.id,
+                      notifiedAt: now,
+                      updatedAt: now,
+                    }
+                  : w
+              ),
+            }));
+
+            get().addWaitlistNotification({
+              waitlistId: entry.id,
+              guestName: entry.guestName,
+              guestPhone: entry.guestPhone,
+              message: `尊敬的${entry.guestName}，您候补的${room?.roomNumber || ''}房间已有空房！${entry.checkIn}~${entry.checkOut}，共${nights}晚，总价¥${totalPrice}，请在24小时内确认预订。`,
+              roomNumber: matchedRoom.roomNumber,
+              checkIn: entry.checkIn,
+              checkOut: entry.checkOut,
+              totalPrice,
+            });
+
+            get().addAuditLog(
+              'waitlist:match',
+              entry.id,
+              entry.guestName,
+              `候补匹配成功: ${entry.guestName} 匹配房间${matchedRoom.roomNumber} ${entry.checkIn}~${entry.checkOut} ¥${totalPrice}`
+            );
+
+            const updatedEntry = get().getWaitlistById(entry.id);
+            if (updatedEntry) matchedEntries.push(updatedEntry);
+          }
+        }
+
+        return matchedEntries;
+      },
+
+      confirmWaitlistBooking: (waitlistId) => {
+        if (!get().hasPermission('waitlist:confirm')) return null;
+        const state = get();
+        const entry = state.getWaitlistById(waitlistId);
+        if (!entry || entry.status !== 'matched') return null;
+
+        const roomId = entry.matchedRoomId || entry.roomId;
+        const room = state.getRoomById(roomId);
+        if (!room) return null;
+
+        const nights = calculateNights(entry.checkIn, entry.checkOut);
+        const totalPrice = room.price * nights;
+        const now = new Date().toISOString();
+
+        const bookingData: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'> = {
+          roomId,
+          guestName: entry.guestName,
+          guestPhone: entry.guestPhone,
+          guestIdCard: entry.guestIdCard,
+          checkIn: entry.checkIn,
+          checkOut: entry.checkOut,
+          guests: entry.guests,
+          totalPrice,
+          status: 'confirmed',
+          notes: entry.notes ? `[候补转预订] ${entry.notes}` : '[候补转预订]',
+        };
+
+        const bookingId = generateId();
+        const newBooking: Booking = {
+          ...bookingData,
+          id: bookingId,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        set((s) => ({
+          bookings: [...s.bookings, newBooking],
+          waitlistEntries: s.waitlistEntries.map((w) =>
+            w.id === waitlistId
+              ? {
+                  ...w,
+                  status: 'confirmed',
+                  matchedBookingId: bookingId,
+                  confirmedAt: now,
+                  updatedAt: now,
+                }
+              : w
+          ),
+        }));
+
+        get().addAuditLog(
+          'waitlist:confirm',
+          waitlistId,
+          entry.guestName,
+          `候补确认预订: ${entry.guestName} 房间${room.roomNumber} ${entry.checkIn}~${entry.checkOut} ¥${totalPrice}`
+        );
+        get().addAuditLog(
+          'booking:create',
+          bookingId,
+          entry.guestName,
+          `创建预订(候补转): ${entry.guestName}(${entry.guestPhone}) 房间${room.roomNumber} ${entry.checkIn}~${entry.checkOut} ¥${totalPrice}`
+        );
+
+        return newBooking;
+      },
+
+      expireOldWaitlistEntries: () => {
+        const state = get();
+        const now = new Date().toISOString();
+        const today = todayStr();
+        const expiredIds: string[] = [];
+
+        state.waitlistEntries.forEach((w) => {
+          if (w.status === 'waiting' && w.checkIn < today) {
+            expiredIds.push(w.id);
+          }
+          if (w.status === 'matched' && w.notifiedAt) {
+            const notifiedDate = new Date(w.notifiedAt);
+            const hoursSince = (Date.now() - notifiedDate.getTime()) / (1000 * 60 * 60);
+            if (hoursSince >= 24) {
+              expiredIds.push(w.id);
+            }
+          }
+        });
+
+        if (expiredIds.length > 0) {
+          set((s) => ({
+            waitlistEntries: s.waitlistEntries.map((w) =>
+              expiredIds.includes(w.id)
+                ? { ...w, status: 'expired', expiredAt: now, updatedAt: now }
+                : w
+            ),
+          }));
+          expiredIds.forEach((id) => {
+            const entry = state.getWaitlistById(id);
+            if (entry) {
+              get().addAuditLog(
+                'waitlist:expire',
+                id,
+                entry.guestName,
+                `候补登记过期: ${entry.guestName} ${entry.checkIn}~${entry.checkOut}`
+              );
+            }
+          });
+        }
+      },
+
+      addWaitlistNotification: (notification) => {
+        const now = new Date().toISOString();
+        const newNotification: WaitlistNotification = {
+          ...notification,
+          id: generateId(),
+          createdAt: now,
+          read: false,
+          confirmed: false,
+        };
+        set((s) => ({
+          waitlistNotifications: [newNotification, ...s.waitlistNotifications].slice(0, 200),
+        }));
+      },
+
+      markNotificationRead: (id) => {
+        set((s) => ({
+          waitlistNotifications: s.waitlistNotifications.map((n) =>
+            n.id === id ? { ...n, read: true } : n
+          ),
+        }));
+      },
+
+      getUnreadNotificationCount: () => {
+        return get().waitlistNotifications.filter((n) => !n.read).length;
       },
 
       getTodayStats: (storeId = 'all') => {

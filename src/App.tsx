@@ -5,6 +5,7 @@ import Dashboard from '@/pages/Dashboard';
 import RoomList from '@/pages/RoomList';
 import Calendar from '@/pages/Calendar';
 import BookingList from '@/pages/BookingList';
+import WaitlistList from '@/pages/WaitlistList';
 import Reports from '@/pages/Reports';
 import GuestList from '@/pages/GuestList';
 import GuestDetail from '@/pages/GuestDetail';
@@ -62,6 +63,14 @@ export default function App() {
             element={
               <ProtectedRoute permission="booking:view">
                 <BookingList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/waitlist"
+            element={
+              <ProtectedRoute permission="waitlist:view">
+                <WaitlistList />
               </ProtectedRoute>
             }
           />
