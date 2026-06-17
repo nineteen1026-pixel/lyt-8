@@ -21,6 +21,7 @@ const actionColorMap: Record<AuditAction, string> = {
   'booking:create': 'bg-green-100 text-green-700',
   'booking:update': 'bg-blue-100 text-blue-700',
   'booking:cancel': 'bg-red-100 text-red-700',
+  'booking:restore': 'bg-green-100 text-green-700',
   'booking:checkin': 'bg-brand-green/20 text-brand-green',
   'booking:checkout': 'bg-amber-100 text-amber-700',
   'waitlist:create': 'bg-amber-100 text-amber-700',

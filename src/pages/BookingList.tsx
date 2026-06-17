@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup, RotateCcw } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Booking, BookingStatus, GuestProfile, RoomType, ExtraService } from '@/types';
 import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone, ExtraServiceChargeTypeLabels } from '@/types';
@@ -19,6 +19,7 @@ export default function BookingList() {
     addBooking,
     updateBooking,
     cancelBooking,
+    restoreBooking,
     getRoomById,
     getRoomsByStore,
     getBookingsByStore,
@@ -28,11 +29,13 @@ export default function BookingList() {
     hasPermission,
     getExtraServiceById,
     calculateExtraServicesPrice,
+    isRoomAvailable,
   } = useAppStore();
 
   const canCreateBooking = hasPermission('booking:create');
   const canUpdateBooking = hasPermission('booking:update');
   const canCancelBooking = hasPermission('booking:cancel');
+  const canRestoreBooking = hasPermission('booking:restore');
   const canCheckIn = hasPermission('booking:checkin');
   const canCheckOut = hasPermission('booking:checkout');
 
@@ -45,6 +48,7 @@ export default function BookingList() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [restoreTarget, setRestoreTarget] = useState<Booking | null>(null);
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
 
   useEffect(() => {
@@ -137,6 +141,20 @@ export default function BookingList() {
     }
     setCancelTarget(null);
     setCancelReason('');
+  };
+
+  const handleRestoreClick = (booking: Booking) => {
+    setRestoreTarget(booking);
+  };
+
+  const handleRestoreConfirm = () => {
+    if (restoreTarget) {
+      const success = restoreBooking(restoreTarget.id);
+      if (!success) {
+        alert('恢复预订失败：目标日期房间已被占用或不可用');
+      }
+    }
+    setRestoreTarget(null);
   };
 
   const handleSubmit = (
@@ -396,6 +414,15 @@ export default function BookingList() {
                           >
                             <Search className="w-4 h-4" />
                           </button>
+                          {b.status === 'cancelled' && canRestoreBooking && (
+                            <button
+                              onClick={() => handleRestoreClick(b)}
+                              className="p-2 rounded-lg text-brand-taupe hover:bg-green-50 hover:text-green-600 transition-colors"
+                              title="恢复预订"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
                           {b.status !== 'cancelled' && b.status !== 'checked-out' && (
                             <>
                               {canUpdateBooking && (
@@ -478,6 +505,70 @@ export default function BookingList() {
             </button>
             <button onClick={handleCancelConfirm} className="btn-danger">
               确认取消
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!restoreTarget}
+        onClose={() => setRestoreTarget(null)}
+        title="恢复预订"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-green-50 rounded-lg">
+            <div className="text-sm text-green-700">
+              确认要恢复 {restoreTarget?.guestName} 的预订吗？
+              <br />
+              房间：{restoreTarget && getRoomNumber(restoreTarget.roomId)}
+              <br />
+              日期：{restoreTarget && formatDateDisplay(restoreTarget.checkIn)} →{' '}
+              {restoreTarget && formatDateDisplay(restoreTarget.checkOut)}
+            </div>
+          </div>
+          {restoreTarget &&
+            (() => {
+              const available = isRoomAvailable(
+                restoreTarget.roomId,
+                restoreTarget.checkIn,
+                restoreTarget.checkOut,
+                restoreTarget.id
+              );
+              return (
+                <div
+                  className={`p-3 rounded-lg text-sm ${
+                    available ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                  }`}
+                >
+                  {available
+                    ? '✓ 目标日期房间可用，可以恢复预订'
+                    : '✗ 目标日期房间已被占用或不可用，无法恢复预订'}
+                </div>
+              );
+            })()}
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setRestoreTarget(null)}
+              className="btn-secondary"
+            >
+              返回
+            </button>
+            <button
+              onClick={handleRestoreConfirm}
+              className="btn-primary !bg-green-600 !hover:bg-green-700"
+              disabled={
+                restoreTarget
+                  ? !isRoomAvailable(
+                      restoreTarget.roomId,
+                      restoreTarget.checkIn,
+                      restoreTarget.checkOut,
+                      restoreTarget.id
+                    )
+                  : true
+              }
+            >
+              确认恢复
             </button>
           </div>
         </div>
@@ -663,6 +754,18 @@ export default function BookingList() {
                 {BookingStatusLabels[detailBooking.status]}
               </span>
               <div className="flex gap-2">
+                {detailBooking.status === 'cancelled' && canRestoreBooking && (
+                  <button
+                    onClick={() => {
+                      handleRestoreClick(detailBooking);
+                      setDetailBooking(null);
+                    }}
+                    className="btn-primary !py-1.5 !px-4 text-sm !bg-green-600 !hover:bg-green-700"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    恢复预订
+                  </button>
+                )}
                 {detailBooking.status === 'confirmed' && canCheckIn && (
                   <button
                     onClick={() => handleStatusUpdate(detailBooking, 'checked-in')}

@@ -80,6 +80,7 @@ interface AppState {
   addBooking: (booking: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>) => boolean;
   updateBooking: (id: string, booking: Partial<Booking>) => boolean;
   cancelBooking: (id: string, reason: string) => void;
+  restoreBooking: (id: string) => boolean;
   updateBookingStatus: (id: string, status: BookingStatus) => void;
   getBookingById: (id: string) => Booking | undefined;
   getBookingsByStore: (storeId: StoreIdFilter) => Booking[];
@@ -514,6 +515,29 @@ export const useAppStore = create<AppState>()(
           get().addAuditLog('booking:cancel', id, existing.guestName, `取消预订: ${existing.guestName} 原因: ${reason}`);
           get().matchWaitlistToAvailability(existing.roomId, existing.checkIn, existing.checkOut);
         }
+      },
+
+      restoreBooking: (id) => {
+        if (!get().hasPermission('booking:restore')) return false;
+        const state = get();
+        const existing = state.getBookingById(id);
+        if (!existing || existing.status !== 'cancelled') return false;
+
+        if (!state.isRoomAvailable(existing.roomId, existing.checkIn, existing.checkOut, id)) {
+          return false;
+        }
+
+        const now = new Date().toISOString();
+        set((s) => ({
+          bookings: s.bookings.map((b) =>
+            b.id === id
+              ? { ...b, status: 'confirmed', cancelReason: undefined, updatedAt: now }
+              : b
+          ),
+        }));
+
+        get().addAuditLog('booking:restore', id, existing.guestName, `恢复预订: ${existing.guestName} 房间${state.getRoomById(existing.roomId)?.roomNumber || ''} ${existing.checkIn}~${existing.checkOut}`);
+        return true;
       },
 
       updateBookingStatus: (id, status) => {

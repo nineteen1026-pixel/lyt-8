@@ -29,6 +29,7 @@ export type Permission =
   | 'booking:create'
   | 'booking:update'
   | 'booking:cancel'
+  | 'booking:restore'
   | 'booking:checkin'
   | 'booking:checkout'
   | 'waitlist:view'
@@ -70,6 +71,7 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'booking:create',
     'booking:update',
     'booking:cancel',
+    'booking:restore',
     'booking:checkin',
     'booking:checkout',
     'waitlist:view',
@@ -104,6 +106,7 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'booking:create',
     'booking:update',
     'booking:cancel',
+    'booking:restore',
     'booking:checkin',
     'booking:checkout',
     'waitlist:view',
@@ -146,6 +149,7 @@ export type AuditAction =
   | 'booking:create'
   | 'booking:update'
   | 'booking:cancel'
+  | 'booking:restore'
   | 'booking:checkin'
   | 'booking:checkout'
   | 'waitlist:create'
@@ -178,6 +182,7 @@ export const AuditActionLabels: Record<AuditAction, string> = {
   'booking:create': '创建预订',
   'booking:update': '更新预订',
   'booking:cancel': '取消预订',
+  'booking:restore': '恢复预订',
   'booking:checkin': '办理入住',
   'booking:checkout': '办理退房',
   'waitlist:create': '新增候补登记',
