@@ -1,11 +1,31 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { Booking } from '@/types';
-import { BookingStatusLabels, normalizePhone } from '@/types';
+import type { Booking, SelectedExtraService, ExtraService } from '@/types';
+import { BookingStatusLabels, normalizePhone, ExtraServiceChargeTypeLabels } from '@/types';
 import Modal from '@/components/Modal';
 import { useAppStore } from '@/store/useAppStore';
 import { calculateNights, todayStr } from '@/utils/date';
 import { addDays, format } from 'date-fns';
-import { Building2, Clock, Ban, ListTodo, AlertCircle } from 'lucide-react';
+import {
+  Building2,
+  Clock,
+  Ban,
+  ListTodo,
+  AlertCircle,
+  Coffee,
+  Car,
+  Train,
+  Bed,
+  Sparkles,
+  Ship,
+  Sunrise,
+  Waves,
+  Mountain,
+  Leaf,
+  Soup,
+  Plus,
+  Minus,
+  Check,
+} from 'lucide-react';
 
 interface BookingFormProps {
   open: boolean;
@@ -33,7 +53,7 @@ export default function BookingForm({
   prefillCheckIn,
   prefillCheckOut,
 }: BookingFormProps) {
-  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById, getMinStayForRoom, checkMinStayCompliance, hasClosedDateInRange, hasPermission, addWaitlistEntry } = useAppStore();
+  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById, getMinStayForRoom, checkMinStayCompliance, hasClosedDateInRange, hasPermission, addWaitlistEntry, getExtraServicesByStore, getExtraServiceById, calculateExtraServicesPrice } = useAppStore();
   const activeRooms = rooms.filter((r) => r.status === 'active');
   const canCreateWaitlist = hasPermission('waitlist:create');
 
@@ -48,6 +68,9 @@ export default function BookingForm({
     status: 'confirmed' as Booking['status'],
     notes: '',
     totalPrice: 0,
+    roomPrice: 0,
+    extraServicesPrice: 0,
+    extraServices: [] as SelectedExtraService[],
   });
 
   const [storeFilter, setStoreFilter] = useState<string>('all');
@@ -75,6 +98,9 @@ export default function BookingForm({
         status: booking.status,
         notes: booking.notes || '',
         totalPrice: booking.totalPrice,
+        roomPrice: booking.roomPrice ?? booking.totalPrice,
+        extraServicesPrice: booking.extraServicesPrice ?? 0,
+        extraServices: booking.extraServices ?? [],
       });
     } else {
       const defaultRoomId = prefillRoomId || (roomsByStore[0]?.id || activeRooms[0]?.id || '');
@@ -93,6 +119,9 @@ export default function BookingForm({
         status: 'confirmed',
         notes: '',
         totalPrice: 0,
+        roomPrice: 0,
+        extraServicesPrice: 0,
+        extraServices: [],
       });
     }
     setErrors({});
@@ -115,13 +144,130 @@ export default function BookingForm({
     const room = getRoomById(formData.roomId);
     const nights = calculateNights(formData.checkIn, formData.checkOut);
     if (room && nights > 0) {
-      setFormData((prev) => ({ ...prev, totalPrice: room.price * nights }));
+      const roomPrice = room.price * nights;
+      const extraServicesPrice = calculateExtraServicesPrice(
+        formData.extraServices,
+        nights,
+        formData.guests
+      );
+      setFormData((prev) => ({
+        ...prev,
+        roomPrice,
+        extraServicesPrice,
+        totalPrice: roomPrice + extraServicesPrice,
+      }));
     }
-  }, [formData.roomId, formData.checkIn, formData.checkOut]);
+  }, [formData.roomId, formData.checkIn, formData.checkOut, formData.extraServices, formData.guests]);
 
   const nights = calculateNights(formData.checkIn, formData.checkOut);
   const selectedRoom = getRoomById(formData.roomId);
   const selectedStore = selectedRoom ? getStoreById(selectedRoom.storeId) : null;
+
+  const availableExtraServices = useMemo(() => {
+    if (!selectedStore) return [];
+    return getExtraServicesByStore(selectedStore.id);
+  }, [selectedStore, getExtraServicesByStore]);
+
+  const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+    Coffee,
+    Croissant: Coffee,
+    Car,
+    Train,
+    Bed,
+    Sparkles,
+    Ship,
+    Sunrise,
+    Waves,
+    Mountain,
+    Leaf,
+    Soup,
+  };
+
+  const getServiceIcon = (iconName: string) => {
+    const Icon = iconMap[iconName] || Sparkles;
+    return <Icon className="w-5 h-5" />;
+  };
+
+  const toggleExtraService = (serviceId: string) => {
+    setFormData((prev) => {
+      const exists = prev.extraServices.find((s) => s.serviceId === serviceId);
+      let newExtraServices: SelectedExtraService[];
+      if (exists) {
+        newExtraServices = prev.extraServices.filter((s) => s.serviceId !== serviceId);
+      } else {
+        newExtraServices = [...prev.extraServices, { serviceId, quantity: 1 }];
+      }
+      const nightsVal = calculateNights(prev.checkIn, prev.checkOut);
+      const newExtraServicesPrice = calculateExtraServicesPrice(
+        newExtraServices,
+        nightsVal,
+        prev.guests
+      );
+      return {
+        ...prev,
+        extraServices: newExtraServices,
+        extraServicesPrice: newExtraServicesPrice,
+        totalPrice: prev.roomPrice + newExtraServicesPrice,
+      };
+    });
+  };
+
+  const updateServiceQuantity = (serviceId: string, delta: number) => {
+    setFormData((prev) => {
+      const newExtraServices = prev.extraServices.map((s) => {
+        if (s.serviceId !== serviceId) return s;
+        const newQty = Math.max(1, s.quantity + delta);
+        return { ...s, quantity: newQty };
+      });
+      const nightsVal = calculateNights(prev.checkIn, prev.checkOut);
+      const newExtraServicesPrice = calculateExtraServicesPrice(
+        newExtraServices,
+        nightsVal,
+        prev.guests
+      );
+      return {
+        ...prev,
+        extraServices: newExtraServices,
+        extraServicesPrice: newExtraServicesPrice,
+        totalPrice: prev.roomPrice + newExtraServicesPrice,
+      };
+    });
+  };
+
+  const isServiceSelected = (serviceId: string) => {
+    return formData.extraServices.some((s) => s.serviceId === serviceId);
+  };
+
+  const getServiceQuantity = (serviceId: string) => {
+    return formData.extraServices.find((s) => s.serviceId === serviceId)?.quantity || 1;
+  };
+
+  const getServiceDisplayPrice = (service: ExtraService) => {
+    const qty = getServiceQuantity(service.id);
+    const nightsVal = calculateNights(formData.checkIn, formData.checkOut);
+    switch (service.chargeType) {
+      case 'per_night':
+        return {
+          unitPrice: service.price,
+          unitLabel: `× ${nightsVal}晚 × ${qty}份`,
+          total: service.price * nightsVal * qty,
+        };
+      case 'per_person_per_night':
+        const people = Math.min(qty, formData.guests);
+        return {
+          unitPrice: service.price,
+          unitLabel: `× ${people}人 × ${nightsVal}晚`,
+          total: service.price * people * nightsVal,
+        };
+      case 'per_stay':
+      default:
+        return {
+          unitPrice: service.price,
+          unitLabel: `× ${qty}次`,
+          total: service.price * qty,
+        };
+    }
+  };
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -221,6 +367,9 @@ export default function BookingForm({
       checkOut: formData.checkOut,
       guests: formData.guests,
       totalPrice: formData.totalPrice,
+      roomPrice: formData.roomPrice,
+      extraServicesPrice: formData.extraServicesPrice,
+      extraServices: formData.extraServices,
       status: formData.status,
       notes: formData.notes.trim() || undefined,
     };
@@ -361,17 +510,43 @@ export default function BookingForm({
         </div>
 
         {selectedRoom && nights > 0 && (
-          <div className="p-4 bg-brand-beige/60 rounded-lg">
+          <div className="p-4 bg-brand-beige/60 rounded-lg space-y-3">
             <div className="flex justify-between items-center text-sm">
               <span className="text-brand-taupe">
                 {selectedRoom.roomNumber} {selectedRoom.name} × {nights}晚
               </span>
-              <span className="font-display text-xl font-bold text-brand-orange">
+              <span className="font-medium text-brand-brown">¥{formData.roomPrice}</span>
+            </div>
+
+            {formData.extraServices.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-brand-brown/10">
+                {formData.extraServices.map((item) => {
+                  const service = getExtraServiceById(item.serviceId);
+                  if (!service) return null;
+                  const priceInfo = getServiceDisplayPrice(service);
+                  return (
+                    <div key={item.serviceId} className="flex justify-between items-center text-sm">
+                      <div className="flex items-center gap-1.5 text-brand-taupe">
+                        {getServiceIcon(service.icon)}
+                        <span>{service.name}</span>
+                        <span className="text-xs text-brand-taupe/70">{priceInfo.unitLabel}</span>
+                      </div>
+                      <span className="font-medium text-brand-brown">¥{priceInfo.total}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-3 border-t border-brand-brown/15">
+              <span className="font-medium text-brand-brown">合计总价</span>
+              <span className="font-display text-2xl font-bold text-brand-orange">
                 ¥{formData.totalPrice}
               </span>
             </div>
+
             {formData.roomId && formData.checkIn && formData.checkOut && (
-              <div className="mt-3 space-y-1">
+              <div className="space-y-1 pt-1">
                 {(() => {
                   const minNights = getMinStayForRoom(formData.roomId, formData.checkIn, formData.checkOut);
                   const meetsMinStay = checkMinStayCompliance(formData.roomId, formData.checkIn, formData.checkOut);
@@ -399,6 +574,85 @@ export default function BookingForm({
                 })()}
               </div>
             )}
+          </div>
+        )}
+
+        {!isWaitlistMode && availableExtraServices.length > 0 && (
+          <div>
+            <label className="label-base mb-3">附加服务（可选）</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {availableExtraServices.map((service) => {
+                const selected = isServiceSelected(service.id);
+                const qty = getServiceQuantity(service.id);
+                const priceInfo = getServiceDisplayPrice(service);
+                return (
+                  <div
+                    key={service.id}
+                    onClick={() => toggleExtraService(service.id)}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      selected
+                        ? 'border-brand-orange bg-brand-orange/5'
+                        : 'border-brand-brown/15 bg-white hover:border-brand-orange/40 hover:bg-brand-beige/30'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          selected ? 'bg-brand-orange text-white' : 'bg-brand-beige text-brand-taupe'
+                        }`}
+                      >
+                        {selected ? <Check className="w-5 h-5" /> : getServiceIcon(service.icon)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-medium text-brand-brown text-sm">{service.name}</div>
+                            <div className="text-xs text-brand-taupe mt-0.5 line-clamp-2">
+                              {service.description}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="font-bold text-brand-orange text-sm">
+                              ¥{service.price}
+                            </div>
+                            <div className="text-xs text-brand-taupe">
+                              {ExtraServiceChargeTypeLabels[service.chargeType]}
+                            </div>
+                          </div>
+                        </div>
+                        {selected && (
+                          <div className="mt-2 pt-2 border-t border-brand-brown/10 flex items-center justify-between">
+                            <div className="text-xs text-brand-taupe">
+                              小计：<span className="font-medium text-brand-brown">¥{priceInfo.total}</span>
+                            </div>
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => updateServiceQuantity(service.id, -1)}
+                                className="w-6 h-6 rounded-full bg-white border border-brand-brown/20 flex items-center justify-center text-brand-taupe hover:bg-brand-beige transition-colors disabled:opacity-40"
+                                disabled={service.chargeType === 'per_person_per_night' ? qty <= 1 : qty <= 1}
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="text-sm font-medium text-brand-brown w-6 text-center">
+                                {service.chargeType === 'per_person_per_night' ? `${qty}人` : `${qty}份`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateServiceQuantity(service.id, 1)}
+                                className="w-6 h-6 rounded-full bg-white border border-brand-brown/20 flex items-center justify-center text-brand-taupe hover:bg-brand-beige transition-colors"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

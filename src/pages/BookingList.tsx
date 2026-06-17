@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import type { Booking, BookingStatus, GuestProfile, RoomType } from '@/types';
-import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone } from '@/types';
+import type { Booking, BookingStatus, GuestProfile, RoomType, ExtraService } from '@/types';
+import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone, ExtraServiceChargeTypeLabels } from '@/types';
 import Badge from '@/components/Badge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import BookingForm from './BookingForm';
@@ -26,6 +26,8 @@ export default function BookingList() {
     getStoreById,
     updateBookingStatus,
     hasPermission,
+    getExtraServiceById,
+    calculateExtraServicesPrice,
   } = useAppStore();
 
   const canCreateBooking = hasPermission('booking:create');
@@ -545,12 +547,89 @@ export default function BookingList() {
                 </div>
               </div>
               <div>
+                <div className="text-xs text-brand-taupe mb-1">房费</div>
+                <div className="font-medium text-brand-brown">
+                  ¥{detailBooking.roomPrice ?? detailBooking.totalPrice}
+                </div>
+              </div>
+              {(detailBooking.extraServicesPrice ?? 0) > 0 && (
+                <div>
+                  <div className="text-xs text-brand-taupe mb-1">附加服务费</div>
+                  <div className="font-medium text-brand-brown">
+                    ¥{detailBooking.extraServicesPrice}
+                  </div>
+                </div>
+              )}
+              <div>
                 <div className="text-xs text-brand-taupe mb-1">总金额</div>
                 <div className="font-display font-bold text-xl text-brand-orange">
                   ¥{detailBooking.totalPrice}
                 </div>
               </div>
             </div>
+
+            {detailBooking.extraServices && detailBooking.extraServices.length > 0 && (
+              <div className="p-4 bg-brand-beige/40 rounded-lg space-y-2">
+                <div className="text-xs text-brand-taupe font-medium mb-2">已选附加服务</div>
+                {detailBooking.extraServices.map((item, idx) => {
+                  const service = getExtraServiceById(item.serviceId);
+                  if (!service) {
+                    return (
+                      <div key={idx} className="text-sm text-brand-taupe">
+                        未知服务（数据已更新）
+                      </div>
+                    );
+                  }
+                  const nights = calculateNights(detailBooking.checkIn, detailBooking.checkOut);
+                  const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+                    Coffee,
+                    Croissant: Coffee,
+                    Car,
+                    Train,
+                    Bed,
+                    Sparkles,
+                    Ship,
+                    Sunrise,
+                    Waves,
+                    Mountain,
+                    Leaf,
+                    Soup,
+                  };
+                  const Icon = iconMap[service.icon] || Sparkles;
+                  let unitLabel = '';
+                  let subtotal = 0;
+                  switch (service.chargeType) {
+                    case 'per_night':
+                      unitLabel = `× ${nights}晚 × ${item.quantity}份`;
+                      subtotal = service.price * nights * item.quantity;
+                      break;
+                    case 'per_person_per_night':
+                      const people = Math.min(item.quantity, detailBooking.guests);
+                      unitLabel = `× ${people}人 × ${nights}晚`;
+                      subtotal = service.price * people * nights;
+                      break;
+                    case 'per_stay':
+                    default:
+                      unitLabel = `× ${item.quantity}次`;
+                      subtotal = service.price * item.quantity;
+                      break;
+                  }
+                  return (
+                    <div
+                      key={item.serviceId}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <div className="flex items-center gap-2 text-brand-brown">
+                        <Icon className="w-4 h-4 text-brand-taupe" />
+                        <span className="font-medium">{service.name}</span>
+                        <span className="text-xs text-brand-taupe">{unitLabel}</span>
+                      </div>
+                      <span className="font-medium text-brand-brown">¥{subtotal}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {detailBooking.guestIdCard && (
               <div>

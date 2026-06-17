@@ -220,6 +220,9 @@ export interface Booking {
   checkOut: string;
   guests: number;
   totalPrice: number;
+  roomPrice: number;
+  extraServicesPrice: number;
+  extraServices: SelectedExtraService[];
   status: BookingStatus;
   notes?: string;
   cancelReason?: string;
@@ -403,6 +406,31 @@ export const CleaningTaskStatusColors: Record<CleaningTaskStatus, string> = {
   'in-progress': 'bg-blue-100 text-blue-700',
   completed: 'bg-green-100 text-green-700',
 };
+
+export type ExtraServiceChargeType = 'per_night' | 'per_stay' | 'per_person_per_night';
+
+export const ExtraServiceChargeTypeLabels: Record<ExtraServiceChargeType, string> = {
+  per_night: '每晚',
+  per_stay: '每次入住',
+  per_person_per_night: '每人每晚',
+};
+
+export interface ExtraService {
+  id: string;
+  storeId: string;
+  name: string;
+  description: string;
+  price: number;
+  chargeType: ExtraServiceChargeType;
+  icon: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SelectedExtraService {
+  serviceId: string;
+  quantity: number;
+}
 
 export type WaitlistStatus = 'waiting' | 'matched' | 'confirmed' | 'cancelled' | 'expired';
 

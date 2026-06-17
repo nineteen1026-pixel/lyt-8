@@ -1,7 +1,195 @@
-import type { Room, Booking, Store, ClosedDate, MinStayRule } from '@/types';
+import type { Room, Booking, Store, ClosedDate, MinStayRule, ExtraService } from '@/types';
 import { normalizePhone } from '@/types';
 import { generateId, todayStr, calculateNights } from './date';
 import { addDays, format, subMonths, subDays } from 'date-fns';
+
+export function getInitialExtraServices(stores: Store[]): ExtraService[] {
+  if (stores.length === 0) return [];
+  const now = new Date().toISOString();
+  const storeIds = stores.map((s) => s.id);
+  const [store1Id, store2Id, store3Id] = storeIds;
+
+  const services: ExtraService[] = [
+    {
+      id: generateId(),
+      storeId: store1Id,
+      name: '中式早餐',
+      description: '营养均衡的中式自助早餐，含粥品、面点、小菜等',
+      price: 38,
+      chargeType: 'per_person_per_night',
+      icon: 'Coffee',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store1Id,
+      name: '西式早餐',
+      description: '精致西式早餐，含面包、蛋类、果汁、咖啡等',
+      price: 48,
+      chargeType: 'per_person_per_night',
+      icon: 'Croissant',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store1Id,
+      name: '机场接送',
+      description: '专业司机专车接送，单程一次',
+      price: 180,
+      chargeType: 'per_stay',
+      icon: 'Car',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store1Id,
+      name: '高铁站接送',
+      description: '专业司机专车接送，单程一次',
+      price: 80,
+      chargeType: 'per_stay',
+      icon: 'Train',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store1Id,
+      name: '加床服务',
+      description: '提供折叠式单人床及床上用品',
+      price: 100,
+      chargeType: 'per_night',
+      icon: 'Bed',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store1Id,
+      name: 'SPA水疗',
+      description: '90分钟专业中式按摩，放松身心',
+      price: 288,
+      chargeType: 'per_stay',
+      icon: 'Sparkles',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store2Id,
+      name: '自助早餐',
+      description: '海景餐厅自助早餐，中西式结合',
+      price: 58,
+      chargeType: 'per_person_per_night',
+      icon: 'Coffee',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store2Id,
+      name: '机场接送',
+      description: '专业司机专车接送，单程一次',
+      price: 260,
+      chargeType: 'per_stay',
+      icon: 'Car',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store2Id,
+      name: '码头接送',
+      description: '往返码头接送服务，单程一次',
+      price: 60,
+      chargeType: 'per_stay',
+      icon: 'Ship',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store2Id,
+      name: '海上日出游',
+      description: '专业游船带您观赏绝美海上日出',
+      price: 198,
+      chargeType: 'per_stay',
+      icon: 'Sunrise',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store2Id,
+      name: '浮潜装备租赁',
+      description: '全套浮潜装备，含面镜、呼吸管、救生衣',
+      price: 80,
+      chargeType: 'per_stay',
+      icon: 'Waves',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store3Id,
+      name: '山野早餐',
+      description: '农家特色早餐，天然有机食材',
+      price: 32,
+      chargeType: 'per_person_per_night',
+      icon: 'Coffee',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store3Id,
+      name: '市区接送',
+      description: '安吉市区往返接送，单程一次',
+      price: 120,
+      chargeType: 'per_stay',
+      icon: 'Car',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store3Id,
+      name: '竹海徒步向导',
+      description: '专业向导带您深入竹海，领略自然之美',
+      price: 158,
+      chargeType: 'per_stay',
+      icon: 'Mountain',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store3Id,
+      name: '采茶体验',
+      description: '亲手采摘高山云雾茶，附赠自制茶礼',
+      price: 128,
+      chargeType: 'per_stay',
+      icon: 'Leaf',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      storeId: store3Id,
+      name: '温泉泡汤',
+      description: '山间天然温泉，不限次使用',
+      price: 168,
+      chargeType: 'per_person_per_night',
+      icon: 'Soup',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+
+  return services;
+}
 
 export function getInitialStores(): Store[] {
   const now = new Date().toISOString();
@@ -240,7 +428,11 @@ function generateHistoricalBookings(rooms: Room[]): Booking[] {
         status = Math.random() > 0.05 ? 'checked-out' : 'cancelled';
       }
 
-      const totalPrice = room.price * nights;
+      const roomPrice = room.price * nights;
+      const hasBreakfast = Math.random() > 0.5;
+      const extraServices = hasBreakfast ? [{ serviceId: 'breakfast-dummy', quantity: Math.floor(Math.random() * 3) + 1 }] : [];
+      const extraServicesPrice = hasBreakfast ? 38 * extraServices[0].quantity * nights : 0;
+      const totalPrice = roomPrice + extraServicesPrice;
 
       bookings.push({
         id: generateId(),
@@ -251,6 +443,9 @@ function generateHistoricalBookings(rooms: Room[]): Booking[] {
         checkOut: format(checkOutDate, 'yyyy-MM-dd'),
         guests: Math.floor(Math.random() * 3) + 1,
         totalPrice,
+        roomPrice,
+        extraServicesPrice,
+        extraServices: hasBreakfast ? extraServices : [],
         status,
         notes: Math.random() > 0.7 ? pickRandom(['需要安静的房间', '希望高层', '需要加床', '商务出行', '蜜月旅行', '']) : '',
         createdAt: now,
@@ -279,7 +474,10 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       checkIn: format(addDays(today, -2), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 1), 'yyyy-MM-dd'),
       guests: 2,
-      totalPrice: 288 * 3,
+      totalPrice: 288 * 3 + 38 * 2 * 3,
+      roomPrice: 288 * 3,
+      extraServicesPrice: 38 * 2 * 3,
+      extraServices: [{ serviceId: 'breakfast-dummy', quantity: 2 }],
       status: 'checked-in',
       notes: '需要安静的房间',
       createdAt: now,
@@ -295,6 +493,9 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       checkOut: format(addDays(today, 2), 'yyyy-MM-dd'),
       guests: 2,
       totalPrice: 288 * 2,
+      roomPrice: 288 * 2,
+      extraServicesPrice: 0,
+      extraServices: [],
       status: 'confirmed',
       notes: '下午3点左右到店',
       createdAt: now,
@@ -309,7 +510,13 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       checkIn: format(addDays(today, 3), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 5), 'yyyy-MM-dd'),
       guests: 2,
-      totalPrice: 528 * 2,
+      totalPrice: 528 * 2 + 58 * 2 * 2 + 260,
+      roomPrice: 528 * 2,
+      extraServicesPrice: 58 * 2 * 2 + 260,
+      extraServices: [
+        { serviceId: 'breakfast-dummy', quantity: 2 },
+        { serviceId: 'transfer-dummy', quantity: 1 },
+      ],
       status: 'confirmed',
       notes: '商务出行，需要发票',
       createdAt: now,
@@ -323,7 +530,10 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       checkIn: format(addDays(today, 1), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 4), 'yyyy-MM-dd'),
       guests: 2,
-      totalPrice: 328 * 3,
+      totalPrice: 328 * 3 + 58 * 2 * 3,
+      roomPrice: 328 * 3,
+      extraServicesPrice: 58 * 2 * 3,
+      extraServices: [{ serviceId: 'breakfast-dummy', quantity: 2 }],
       status: 'confirmed',
       notes: '蜜月旅行，希望房间有浪漫布置',
       createdAt: now,
@@ -337,7 +547,13 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       checkIn: format(addDays(today, 7), 'yyyy-MM-dd'),
       checkOut: format(addDays(today, 10), 'yyyy-MM-dd'),
       guests: 4,
-      totalPrice: 688 * 3,
+      totalPrice: 688 * 3 + 32 * 4 * 3 + 100 * 1 * 3,
+      roomPrice: 688 * 3,
+      extraServicesPrice: 32 * 4 * 3 + 100 * 1 * 3,
+      extraServices: [
+        { serviceId: 'breakfast-dummy', quantity: 4 },
+        { serviceId: 'extrabed-dummy', quantity: 1 },
+      ],
       status: 'confirmed',
       notes: '两大两小，需要儿童用品',
       createdAt: now,
@@ -352,6 +568,9 @@ export function getInitialBookings(rooms: Room[]): Booking[] {
       checkOut: format(addDays(today, -2), 'yyyy-MM-dd'),
       guests: 2,
       totalPrice: 888 * 3,
+      roomPrice: 888 * 3,
+      extraServicesPrice: 0,
+      extraServices: [],
       status: 'checked-out',
       notes: '',
       createdAt: now,

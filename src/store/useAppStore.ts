@@ -21,11 +21,13 @@ import type {
   WaitlistEntry,
   WaitlistStatus,
   WaitlistNotification,
+  ExtraService,
+  SelectedExtraService,
 } from '@/types';
 import { normalizePhone, RolePermissions, ClosedDateReasonLabels } from '@/types';
 import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
 import { differenceInDays, parseISO } from 'date-fns';
-import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules } from '@/utils/mockData';
+import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules, getInitialExtraServices } from '@/utils/mockData';
 
 type StoreIdFilter = string | 'all';
 
@@ -41,6 +43,7 @@ interface AppState {
   cleaningTasks: CleaningTask[];
   closedDates: ClosedDate[];
   minStayRules: MinStayRule[];
+  extraServices: ExtraService[];
   waitlistEntries: WaitlistEntry[];
   waitlistNotifications: WaitlistNotification[];
   users: User[];
@@ -117,6 +120,14 @@ interface AppState {
   deleteMinStayRule: (id: string) => void;
   getMinStayRulesByRoom: (roomId: string) => MinStayRule[];
 
+  getExtraServicesByStore: (storeId: StoreIdFilter) => ExtraService[];
+  getExtraServiceById: (id: string) => ExtraService | undefined;
+  calculateExtraServicesPrice: (
+    extraServices: SelectedExtraService[],
+    nights: number,
+    guests: number
+  ) => number;
+
   getTodayStats: (storeId?: StoreIdFilter) => {
     totalRooms: number;
     occupiedToday: number;
@@ -166,6 +177,7 @@ export const useAppStore = create<AppState>()(
       cleaningTasks: [],
       closedDates: [],
       minStayRules: [],
+      extraServices: [],
       waitlistEntries: [],
       waitlistNotifications: [],
       users: defaultUsers,
@@ -186,6 +198,18 @@ export const useAppStore = create<AppState>()(
             }));
             set({ bookings: normalizedBookings });
           }
+          const hasMissingFields = bookings.some(
+            (b) => b.roomPrice === undefined || b.extraServices === undefined
+          );
+          if (hasMissingFields) {
+            const updatedBookings = bookings.map((b) => ({
+              ...b,
+              roomPrice: b.roomPrice ?? b.totalPrice,
+              extraServicesPrice: b.extraServicesPrice ?? 0,
+              extraServices: b.extraServices ?? [],
+            }));
+            set({ bookings: updatedBookings });
+          }
           expireOldWaitlistEntries();
           return;
         }
@@ -195,12 +219,14 @@ export const useAppStore = create<AppState>()(
         const initialBookings = getInitialBookings(initialRooms);
         const initialClosedDates = getInitialClosedDates(initialRooms);
         const initialMinStayRules = getInitialMinStayRules(initialRooms);
+        const initialExtraServices = getInitialExtraServices(initialStores);
         set({
           stores: initialStores,
           rooms: initialRooms,
           bookings: initialBookings,
           closedDates: initialClosedDates,
           minStayRules: initialMinStayRules,
+          extraServices: initialExtraServices,
           initialized: true,
         });
       },
@@ -779,6 +805,9 @@ export const useAppStore = create<AppState>()(
           checkOut: entry.checkOut,
           guests: entry.guests,
           totalPrice,
+          roomPrice: totalPrice,
+          extraServicesPrice: 0,
+          extraServices: [],
           status: 'confirmed',
           notes: entry.notes ? `[候补转预订] ${entry.notes}` : '[候补转预订]',
         };
@@ -1454,6 +1483,40 @@ export const useAppStore = create<AppState>()(
 
       getMinStayRulesByRoom: (roomId) => {
         return get().minStayRules.filter((r) => r.roomId === roomId);
+      },
+
+      getExtraServicesByStore: (storeId) => {
+        const { extraServices } = get();
+        if (storeId === 'all') return extraServices;
+        return extraServices.filter((s) => s.storeId === storeId);
+      },
+
+      getExtraServiceById: (id) => {
+        return get().extraServices.find((s) => s.id === id);
+      },
+
+      calculateExtraServicesPrice: (selected, nights, guests) => {
+        const { getExtraServiceById } = get();
+        let total = 0;
+        selected.forEach((item) => {
+          const service = getExtraServiceById(item.serviceId);
+          if (!service) return;
+          let multiplier = 1;
+          switch (service.chargeType) {
+            case 'per_night':
+              multiplier = nights;
+              break;
+            case 'per_person_per_night':
+              multiplier = nights * Math.min(item.quantity, guests);
+              break;
+            case 'per_stay':
+            default:
+              multiplier = 1;
+              break;
+          }
+          total += service.price * multiplier * (service.chargeType === 'per_person_per_night' ? 1 : item.quantity);
+        });
+        return total;
       },
     }),
     {
