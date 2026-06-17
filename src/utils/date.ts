@@ -7,6 +7,7 @@ import {
   startOfDay,
   endOfDay,
   differenceInDays,
+  differenceInMonths,
   eachDayOfInterval,
   getDaysInMonth,
   getDay,
@@ -155,4 +156,24 @@ export function endOfMonthStr(date: string | Date): string {
 export function formatDateTimeDisplay(date: string | Date): string {
   const d = typeof date === 'string' ? parseISO(date) : date;
   return format(d, 'yyyy年M月d日 HH:mm', { locale: zhCN });
+}
+
+export function calculateMonths(startDate: string, endDate: string): number {
+  const months = differenceInMonths(parseISO(endDate), parseISO(startDate));
+  return Math.max(1, months);
+}
+
+export function addMonthsStr(dateStr: string, months: number): string {
+  const d = addMonths(parseISO(dateStr), months);
+  return format(d, 'yyyy-MM-dd');
+}
+
+export function getContractPeriodLabel(startDate: string, monthIndex: number): string {
+  const d = addMonths(parseISO(startDate), monthIndex);
+  return format(d, 'yyyy年M月');
+}
+
+export function getMonthDueDate(startDate: string, monthIndex: number): string {
+  const d = addMonths(parseISO(startDate), monthIndex);
+  return format(d, 'yyyy-MM-dd');
 }

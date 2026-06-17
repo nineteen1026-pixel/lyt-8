@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, BedDouble, Building2, Filter, Ban, LogIn, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, BedDouble, Building2, Filter, Ban, LogIn, LogOut, FileSignature, AlertTriangle, Clock } from 'lucide-react';
 import { format, getMonth, getYear, isToday, parseISO } from 'date-fns';
 import { useAppStore } from '@/store/useAppStore';
 import { getMonthMatrix, getWeekDays, formatMonth, formatDateDisplay, calculateNights } from '@/utils/date';
-import type { Booking, ClosedDate } from '@/types';
-import { BookingStatusColors, BookingStatusLabels, RoomTypeLabels, RoomStatusLabels, ClosedDateReasonLabels, ClosedDateReasonColors } from '@/types';
+import type { Booking, ClosedDate, LongTermContract } from '@/types';
+import { BookingStatusColors, BookingStatusLabels, RoomTypeLabels, RoomStatusLabels, ClosedDateReasonLabels, ClosedDateReasonColors, LongTermContractStatusLabels, LongTermContractStatusColors } from '@/types';
 import Badge from '@/components/Badge';
 import Modal from '@/components/Modal';
 import BookingForm from './BookingForm';
@@ -22,6 +22,9 @@ export default function CalendarView() {
     getStoreById,
     getClosedDatesByDate,
     getClosedDatesByRoom,
+    getActiveLongTermContractsByDate,
+    getContractExpiryInfo,
+    longTermContracts,
   } = useAppStore();
   const [storeFilter, setStoreFilter] = useState<string>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -73,24 +76,32 @@ export default function CalendarView() {
     return getClosedDatesByDate(dateStr, storeFilter);
   };
 
+  const getDayLongTermContracts = (date: Date): LongTermContract[] => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return getActiveLongTermContractsByDate(dateStr, storeFilter);
+  };
+
   const getDayStatus = (date: Date) => {
     const dateBookings = getDayBookings(date);
     const closedDates = getDayClosedDates(date);
-    const occupied = dateBookings.length;
+    const longTerms = getDayLongTermContracts(date);
+    const occupied = dateBookings.length + longTerms.length;
     const closedRooms = closedDates.length;
+    const longTermCount = longTerms.length;
     const total = activeRooms.length;
-    if (total === 0) return { ratio: 0, closedRatio: 0, label: '无数据' };
+    if (total === 0) return { ratio: 0, closedRatio: 0, longTermRatio: 0, label: '无数据' };
     const ratio = occupied / total;
     const closedRatio = closedRooms / total;
-    if (closedRatio > 0 && ratio === 0) return { ratio, closedRatio, label: `${closedRooms}间禁订` };
-    if (ratio === 0) return { ratio, closedRatio, label: '全部空闲' };
-    if (ratio >= 1) return { ratio, closedRatio, label: '全部满房' };
-    return { ratio, closedRatio, label: `已订${occupied}/${total}` };
+    const longTermRatio = longTermCount / total;
+    if (closedRatio > 0 && ratio === 0) return { ratio, closedRatio, longTermRatio, label: `${closedRooms}间禁订` };
+    if (ratio === 0) return { ratio, closedRatio, longTermRatio, label: '全部空闲' };
+    if (ratio >= 1) return { ratio, closedRatio, longTermRatio, label: '全部满房' };
+    return { ratio, closedRatio, longTermRatio, label: `已订${occupied}/${total}${longTermCount > 0 ? `(长租${longTermCount})` : ''}` };
   };
 
   const getDayColorClass = (date: Date) => {
     const isCurrentMonth = getMonth(date) === month;
-    const { ratio, closedRatio } = getDayStatus(date);
+    const { ratio, closedRatio, longTermRatio } = getDayStatus(date);
     const hasMaintenance = maintenanceRooms.length > 0;
 
     if (!isCurrentMonth) {
@@ -99,6 +110,9 @@ export default function CalendarView() {
     if (closedRatio > 0 && ratio === 0) return 'bg-rose-100 hover:bg-rose-200 text-rose-700';
     if (hasMaintenance && ratio === 0) return 'bg-rose-50 hover:bg-rose-100';
     if (ratio === 0) return 'bg-white hover:bg-brand-sage/30';
+    if (longTermRatio > 0 && ratio < 0.5) return 'bg-indigo-100 hover:bg-indigo-200 text-indigo-800';
+    if (longTermRatio > 0 && ratio < 1) return 'bg-indigo-200 hover:bg-indigo-300 text-indigo-900';
+    if (longTermRatio > 0 && ratio >= 1) return 'bg-indigo-500 hover:bg-indigo-600 text-white';
     if (ratio < 0.5) return 'bg-brand-sage/40 hover:bg-brand-sage/60';
     if (ratio < 1) return 'bg-brand-orange/30 hover:bg-brand-orange/40';
     return 'bg-brand-orange/60 hover:bg-brand-orange/70 text-white';
@@ -146,6 +160,7 @@ export default function CalendarView() {
 
   const selectedDateBookings = selectedDate ? getActiveBookingsByDate(selectedDate, storeFilter) : [];
   const selectedDateClosedDates = selectedDate ? getClosedDatesByDate(selectedDate, storeFilter) : [];
+  const selectedDateLongTerm = selectedDate ? getActiveLongTermContractsByDate(selectedDate, storeFilter) : [];
 
   return (
     <div className="animate-fade-in">
@@ -211,7 +226,7 @@ export default function CalendarView() {
             </button>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 text-sm text-brand-taupe">
+            <div className="flex items-center gap-3 text-sm text-brand-taupe flex-wrap">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-white border border-brand-brown/20" />
                 空闲
@@ -223,6 +238,14 @@ export default function CalendarView() {
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-brand-orange/60" />
                 满房
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-indigo-200 border border-indigo-400" />
+                有长租
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-indigo-500" />
+                长租满房
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-rose-100 border border-rose-300" />
@@ -297,10 +320,38 @@ export default function CalendarView() {
                       </div>
                     )}
                   </div>
-                  {isCurrentMonth && getDayBookings(date).length > 0 && (
+                  {isCurrentMonth && (getDayBookings(date).length > 0 || getDayLongTermContracts(date).length > 0) && (
                     <div className="space-y-1 mt-1">
+                      {getDayLongTermContracts(date)
+                        .slice(0, 1)
+                        .map((c) => {
+                          const room = getRoomById(c.roomId);
+                          const expiryInfo = getContractExpiryInfo(c.id);
+                          const isUrgent = expiryInfo?.alertLevel === 'urgent';
+                          const isRemind = expiryInfo?.alertLevel === 'remind';
+                          return (
+                            <div
+                              key={`lt-${c.id}`}
+                              className={`text-xs px-1.5 py-0.5 rounded truncate flex items-center gap-1 ${
+                                dayStatus.longTermRatio > 0 && dayStatus.ratio >= 1
+                                  ? 'bg-white/20 text-white'
+                                  : isUrgent
+                                  ? 'bg-red-100 text-red-700 border border-red-300'
+                                  : isRemind
+                                  ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                                  : 'bg-indigo-100 text-indigo-700'
+                              }`}
+                              title={isUrgent ? `紧急：${expiryInfo?.daysRemaining}天后到期` : isRemind ? `提醒：${expiryInfo?.daysRemaining}天后到期` : `长租至${formatDateDisplay(c.endDate)}`}
+                            >
+                              <FileSignature className="w-3 h-3 flex-shrink-0" />
+                              {room?.roomNumber} {c.guestName}
+                              {isUrgent && <AlertTriangle className="w-3 h-3 flex-shrink-0" />}
+                              {!isUrgent && isRemind && <Clock className="w-3 h-3 flex-shrink-0" />}
+                            </div>
+                          );
+                        })}
                       {getDayBookings(date)
-                        .slice(0, 2)
+                        .slice(0, getDayLongTermContracts(date).length > 0 ? 1 : 2)
                         .map((b) => {
                           const room = getRoomById(b.roomId);
                           return (
@@ -316,13 +367,13 @@ export default function CalendarView() {
                             </div>
                           );
                         })}
-                      {getDayBookings(date).length > 2 && (
+                      {(getDayBookings(date).length + getDayLongTermContracts(date).length) > 2 && (
                         <div
                           className={`text-xs ${
                             dayStatus.ratio >= 1 ? 'text-white/80' : 'text-brand-taupe'
                           }`}
                         >
-                          +{getDayBookings(date).length - 2} 更多
+                          +{getDayBookings(date).length + getDayLongTermContracts(date).length - 2} 更多
                         </div>
                       )}
                     </div>
@@ -346,6 +397,11 @@ export default function CalendarView() {
               <div>
                 <p className="text-sm text-brand-taupe">
                   共 {activeRooms.length} 间正常房，已预订 {selectedDateBookings.length} 间
+                  {selectedDateLongTerm.length > 0 && (
+                    <span className="ml-2 text-indigo-600">
+                      · 长租 {selectedDateLongTerm.length} 间
+                    </span>
+                  )}
                   {maintenanceRooms.length > 0 && (
                     <span className="ml-2 text-rose-600">
                       · {maintenanceRooms.length} 间维护中
@@ -395,6 +451,77 @@ export default function CalendarView() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {selectedDate && selectedDateLongTerm.length > 0 && (
+              <div className="mb-5">
+                <h3 className="text-sm font-medium text-indigo-700 mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                  长租合同 ({selectedDateLongTerm.length})
+                </h3>
+                <div className="space-y-2">
+                  {selectedDateLongTerm.map((c) => {
+                    const room = getRoomById(c.roomId);
+                    if (!room) return null;
+                    const expiryInfo = getContractExpiryInfo(c.id);
+                    const isUrgent = expiryInfo?.alertLevel === 'urgent';
+                    const isRemind = expiryInfo?.alertLevel === 'remind';
+                    return (
+                      <div
+                        key={c.id}
+                        className={`p-3 rounded-xl border ${
+                          isUrgent
+                            ? 'bg-red-50 border-red-200'
+                            : isRemind
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-indigo-50 border-indigo-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                              isUrgent ? 'bg-red-100' : isRemind ? 'bg-amber-100' : 'bg-indigo-100'
+                            }`}>
+                              <FileSignature className={`w-5 h-5 ${
+                                isUrgent ? 'text-red-600' : isRemind ? 'text-amber-600' : 'text-indigo-600'
+                              }`} />
+                            </div>
+                            <div>
+                              <div className="font-medium text-brand-brown">
+                                {room.roomNumber} {room.name} · {c.guestName}
+                              </div>
+                              <div className="text-xs text-brand-taupe flex items-center gap-1">
+                                <Building2 className="w-3 h-3" />
+                                {getStoreById(room.storeId)?.name || '未知门店'}
+                              </div>
+                              <div className="text-xs text-brand-taupe mt-0.5">
+                                {formatDateDisplay(c.startDate)} → {formatDateDisplay(c.endDate)} ({c.months}个月)
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${LongTermContractStatusColors[c.status]}`}>
+                              {LongTermContractStatusLabels[c.status]}
+                            </span>
+                            {isUrgent && (
+                              <div className="text-xs text-red-600 mt-1 flex items-center justify-end gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                {expiryInfo?.daysRemaining}天后到期
+                              </div>
+                            )}
+                            {!isUrgent && isRemind && (
+                              <div className="text-xs text-amber-600 mt-1 flex items-center justify-end gap-1">
+                                <Clock className="w-3 h-3" />
+                                {expiryInfo?.daysRemaining}天后到期
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -455,8 +582,10 @@ export default function CalendarView() {
                 {activeRooms.map((room) => {
                   const roomBooking = selectedDateBookings.find((b) => b.roomId === room.id);
                   const roomClosedDate = selectedDateClosedDates.find((cd) => cd.roomId === room.id);
-                  const isAvailable = !roomBooking && !roomClosedDate;
+                  const roomLongTerm = selectedDateLongTerm.find((c) => c.roomId === room.id);
+                  const isAvailable = !roomBooking && !roomClosedDate && !roomLongTerm;
                   const isClosed = !!roomClosedDate;
+                  const isLongTerm = !!roomLongTerm;
 
                   return (
                     <div
@@ -464,6 +593,8 @@ export default function CalendarView() {
                       className={`p-4 rounded-xl border transition-colors ${
                         isClosed
                           ? 'bg-rose-100/50 border-rose-300'
+                          : isLongTerm
+                          ? 'bg-indigo-50 border-indigo-200'
                           : isAvailable
                           ? 'bg-brand-sage/10 border-brand-green/20'
                           : 'bg-brand-orange/5 border-brand-orange/20'
@@ -505,6 +636,43 @@ export default function CalendarView() {
                                 </div>
                               )}
                             </div>
+                          ) : isLongTerm && roomLongTerm ? (
+                            (() => {
+                              const expiryInfo = getContractExpiryInfo(roomLongTerm.id);
+                              const isUrgent = expiryInfo?.alertLevel === 'urgent';
+                              const isRemind = expiryInfo?.alertLevel === 'remind';
+                              return (
+                                <div className="text-right">
+                                  <div className="font-medium text-indigo-700 text-sm flex items-center justify-end gap-1">
+                                    <FileSignature className="w-3 h-3" />
+                                    {roomLongTerm.guestName}
+                                  </div>
+                                  <div className="text-xs text-brand-taupe">
+                                    {formatDateDisplay(roomLongTerm.startDate)} →{' '}
+                                    {formatDateDisplay(roomLongTerm.endDate)} ({roomLongTerm.months}个月)
+                                  </div>
+                                  <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                                    <span
+                                      className={`text-xs px-2 py-0.5 rounded-full ${LongTermContractStatusColors[roomLongTerm.status]}`}
+                                    >
+                                      {LongTermContractStatusLabels[roomLongTerm.status]}
+                                    </span>
+                                    {isUrgent && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        {expiryInfo?.daysRemaining}天
+                                      </span>
+                                    )}
+                                    {!isUrgent && isRemind && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
+                                        <Clock className="w-3 h-3" />
+                                        {expiryInfo?.daysRemaining}天
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()
                           ) : (
                             roomBooking && (
                               <div className="text-right">

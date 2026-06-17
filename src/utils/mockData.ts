@@ -1,7 +1,7 @@
-import type { Room, Booking, Store, ClosedDate, MinStayRule, ExtraService } from '@/types';
-import { normalizePhone } from '@/types';
-import { generateId, todayStr, calculateNights } from './date';
-import { addDays, format, subMonths, subDays } from 'date-fns';
+import type { Room, Booking, Store, ClosedDate, MinStayRule, ExtraService, LongTermContract, PaymentRecord } from '@/types';
+import { normalizePhone, PaymentStatus } from '@/types';
+import { generateId, todayStr, calculateNights, calculateMonths, addMonthsStr, getContractPeriodLabel, getMonthDueDate } from './date';
+import { addDays, format, subMonths, subDays, addMonths, parseISO } from 'date-fns';
 
 export function getInitialExtraServices(stores: Store[]): ExtraService[] {
   if (stores.length === 0) return [];
@@ -651,4 +651,181 @@ export function getInitialMinStayRules(rooms: Room[]): MinStayRule[] {
       updatedAt: now,
     },
   ];
+}
+
+function generatePaymentRecords(contractId: string, startDate: string, months: number, monthlyRent: number, paidMonths: number): PaymentRecord[] {
+  const records: PaymentRecord[] = [];
+  const now = new Date().toISOString();
+  const today = todayStr();
+
+  for (let i = 0; i < months; i++) {
+    const dueDate = getMonthDueDate(startDate, i);
+    let status: PaymentStatus = 'pending';
+    let paidAmount = 0;
+    let paidAt: string | undefined;
+
+    if (i < paidMonths) {
+      status = 'paid';
+      paidAmount = monthlyRent;
+      paidAt = format(addDays(parseISO(dueDate), Math.floor(Math.random() * 3)), 'yyyy-MM-dd') + 'T10:00:00Z';
+    } else if (dueDate < today) {
+      status = 'overdue';
+    }
+
+    records.push({
+      id: generateId(),
+      contractId,
+      period: getContractPeriodLabel(startDate, i),
+      monthIndex: i,
+      dueDate,
+      amount: monthlyRent,
+      paidAmount,
+      status,
+      paidAt,
+      paymentMethod: status === 'paid' ? (Math.random() > 0.5 ? '银行转账' : '微信支付') : undefined,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return records;
+}
+
+export function getInitialLongTermContracts(rooms: Room[]): LongTermContract[] {
+  if (rooms.length === 0) return [];
+  const now = new Date().toISOString();
+  const today = new Date();
+
+  const contracts: LongTermContract[] = [];
+
+  const activeStart = format(subMonths(today, 3), 'yyyy-MM-dd');
+  const activeMonths = 12;
+  const activeRent = 5800;
+  const activePaidMonths = 3;
+  contracts.push({
+    id: generateId(),
+    roomId: rooms[0].id,
+    guestName: '刘经理',
+    guestPhone: normalizePhone('18600186001'),
+    guestIdCard: '330101198805051234',
+    startDate: activeStart,
+    endDate: addMonthsStr(activeStart, activeMonths),
+    months: activeMonths,
+    monthlyRent: activeRent,
+    deposit: activeRent * 2,
+    totalAmount: activeRent * activeMonths,
+    paidAmount: activeRent * activePaidMonths,
+    status: 'active',
+    paymentRecords: generatePaymentRecords('', activeStart, activeMonths, activeRent, activePaidMonths),
+    renewCount: 0,
+    notes: '公司外派员工长住，按季度支付',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const expiringStart = format(subMonths(today, 5), 'yyyy-MM-dd');
+  const expiringMonths = 6;
+  const expiringRent = 7200;
+  const expiringPaidMonths = 6;
+  contracts.push({
+    id: generateId(),
+    roomId: rooms[1].id,
+    guestName: '黄女士',
+    guestPhone: normalizePhone('18700187002'),
+    guestIdCard: '330101199112124567',
+    startDate: expiringStart,
+    endDate: addMonthsStr(expiringStart, expiringMonths),
+    months: expiringMonths,
+    monthlyRent: expiringRent,
+    deposit: expiringRent * 2,
+    totalAmount: expiringRent * expiringMonths,
+    paidAmount: expiringRent * expiringPaidMonths,
+    status: 'expiring',
+    paymentRecords: generatePaymentRecords('', expiringStart, expiringMonths, expiringRent, expiringPaidMonths),
+    renewCount: 0,
+    notes: '装修期间临时居住，有意向续签',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const urgentStart = format(subMonths(today, 11), 'yyyy-MM-dd');
+  const urgentMonths = 12;
+  const urgentRent = 6500;
+  const urgentPaidMonths = 11;
+  contracts.push({
+    id: generateId(),
+    roomId: rooms[4].id,
+    guestName: '吴先生',
+    guestPhone: normalizePhone('18800188003'),
+    startDate: urgentStart,
+    endDate: addMonthsStr(urgentStart, urgentMonths),
+    months: urgentMonths,
+    monthlyRent: urgentRent,
+    deposit: urgentRent,
+    totalAmount: urgentRent * urgentMonths,
+    paidAmount: urgentRent * urgentPaidMonths,
+    status: 'expiring',
+    paymentRecords: generatePaymentRecords('', urgentStart, urgentMonths, urgentRent, urgentPaidMonths),
+    renewCount: 1,
+    originalContractId: generateId(),
+    notes: '已续签一次，合同即将到期',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const expiredStart = format(subMonths(today, 8), 'yyyy-MM-dd');
+  const expiredMonths = 6;
+  const expiredRent = 4800;
+  contracts.push({
+    id: generateId(),
+    roomId: rooms[8].id,
+    guestName: '周老师',
+    guestPhone: normalizePhone('18900189004'),
+    startDate: expiredStart,
+    endDate: addMonthsStr(expiredStart, expiredMonths),
+    months: expiredMonths,
+    monthlyRent: expiredRent,
+    deposit: expiredRent,
+    totalAmount: expiredRent * expiredMonths,
+    paidAmount: expiredRent * expiredMonths,
+    status: 'expired',
+    paymentRecords: generatePaymentRecords('', expiredStart, expiredMonths, expiredRent, expiredMonths),
+    renewCount: 0,
+    notes: '学术交流期满，已退房',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const longStayStart = format(subMonths(today, 1), 'yyyy-MM-dd');
+  const longStayMonths = 24;
+  const longStayRent = 9800;
+  const longStayPaidMonths = 1;
+  contracts.push({
+    id: generateId(),
+    roomId: rooms[5].id,
+    guestName: '陈总',
+    guestPhone: normalizePhone('19000190005'),
+    guestIdCard: '310101198001018888',
+    startDate: longStayStart,
+    endDate: addMonthsStr(longStayStart, longStayMonths),
+    months: longStayMonths,
+    monthlyRent: longStayRent,
+    deposit: longStayRent * 3,
+    totalAmount: longStayRent * longStayMonths,
+    paidAmount: longStayRent * longStayPaidMonths,
+    status: 'active',
+    paymentRecords: generatePaymentRecords('', longStayStart, longStayMonths, longStayRent, longStayPaidMonths),
+    renewCount: 0,
+    notes: '高管长期居住，2年合同，年付优惠',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  contracts.forEach((c) => {
+    c.paymentRecords.forEach((pr) => {
+      pr.contractId = c.id;
+    });
+  });
+
+  return contracts;
 }

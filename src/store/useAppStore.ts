@@ -23,11 +23,17 @@ import type {
   WaitlistNotification,
   ExtraService,
   SelectedExtraService,
+  LongTermContract,
+  LongTermContractStatus,
+  PaymentRecord,
+  PaymentStatus,
+  ContractExpiryInfo,
+  ExpiryAlertLevel,
 } from '@/types';
-import { normalizePhone, RolePermissions, ClosedDateReasonLabels } from '@/types';
-import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
-import { differenceInDays, parseISO } from 'date-fns';
-import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules, getInitialExtraServices } from '@/utils/mockData';
+import { normalizePhone, RolePermissions, ClosedDateReasonLabels, LongTermContractStatusLabels } from '@/types';
+import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate, calculateMonths, addMonthsStr, getContractPeriodLabel, getMonthDueDate } from '@/utils/date';
+import { differenceInDays, differenceInCalendarDays, parseISO } from 'date-fns';
+import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules, getInitialExtraServices, getInitialLongTermContracts } from '@/utils/mockData';
 
 type StoreIdFilter = string | 'all';
 
@@ -86,7 +92,8 @@ interface AppState {
     roomId: string,
     checkIn: string,
     checkOut: string,
-    excludeBookingId?: string
+    excludeBookingId?: string,
+    excludeContractId?: string
   ) => boolean;
   getAvailableRooms: (checkIn: string, checkOut: string, storeId?: StoreIdFilter) => Room[];
   getMinStayForRoom: (roomId: string, checkIn: string, checkOut: string) => number;
@@ -166,6 +173,22 @@ interface AppState {
     maintenanceRooms: number;
     total: number;
   };
+
+  longTermContracts: LongTermContract[];
+  addLongTermContract: (contract: Omit<LongTermContract, 'id' | 'createdAt' | 'updatedAt' | 'paymentRecords' | 'status' | 'paidAmount' | 'totalAmount' | 'months' | 'endDate' | 'renewCount'> & { endDate?: string; months?: number }) => boolean;
+  updateLongTermContract: (id: string, contract: Partial<LongTermContract>) => boolean;
+  cancelLongTermContract: (id: string, reason: string) => void;
+  renewLongTermContract: (id: string, months: number, monthlyRent?: number) => LongTermContract | null;
+  getLongTermContractById: (id: string) => LongTermContract | undefined;
+  getLongTermContractsByStore: (storeId: StoreIdFilter) => LongTermContract[];
+  getLongTermContractsByRoom: (roomId: string) => LongTermContract[];
+  getActiveLongTermContractsByDate: (date: string, storeId?: StoreIdFilter) => LongTermContract[];
+  isRoomOccupiedByLongTerm: (roomId: string, checkIn: string, checkOut: string, excludeContractId?: string) => boolean;
+  updatePaymentRecord: (contractId: string, paymentId: string, paidAmount: number, paymentMethod?: string, notes?: string) => boolean;
+  getContractExpiryInfo: (contractId: string) => ContractExpiryInfo | null;
+  getExpiringContracts: (daysThreshold?: number, storeId?: StoreIdFilter) => LongTermContract[];
+  getOverduePayments: (storeId?: StoreIdFilter) => PaymentRecord[];
+  updateLongTermContractStatuses: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -180,13 +203,14 @@ export const useAppStore = create<AppState>()(
       extraServices: [],
       waitlistEntries: [],
       waitlistNotifications: [],
+      longTermContracts: [],
       users: defaultUsers,
       currentUser: defaultUsers[0],
       auditLogs: [],
       initialized: false,
 
       initializeData: () => {
-        const { initialized, rooms, bookings, expireOldWaitlistEntries } = get();
+        const { initialized, rooms, bookings, expireOldWaitlistEntries, longTermContracts, updateLongTermContractStatuses } = get();
         if (initialized && rooms.length > 0) {
           const hasNonNormalized = bookings.some(
             (b) => b.guestPhone !== normalizePhone(b.guestPhone)
@@ -210,7 +234,18 @@ export const useAppStore = create<AppState>()(
             }));
             set({ bookings: updatedBookings });
           }
+          const hasContractsNonNormalized = longTermContracts.some(
+            (c) => c.guestPhone !== normalizePhone(c.guestPhone)
+          );
+          if (hasContractsNonNormalized) {
+            const normalized = longTermContracts.map((c) => ({
+              ...c,
+              guestPhone: normalizePhone(c.guestPhone),
+            }));
+            set({ longTermContracts: normalized });
+          }
           expireOldWaitlistEntries();
+          updateLongTermContractStatuses();
           return;
         }
 
@@ -220,6 +255,7 @@ export const useAppStore = create<AppState>()(
         const initialClosedDates = getInitialClosedDates(initialRooms);
         const initialMinStayRules = getInitialMinStayRules(initialRooms);
         const initialExtraServices = getInitialExtraServices(initialStores);
+        const initialLongTermContracts = getInitialLongTermContracts(initialRooms);
         set({
           stores: initialStores,
           rooms: initialRooms,
@@ -227,6 +263,7 @@ export const useAppStore = create<AppState>()(
           closedDates: initialClosedDates,
           minStayRules: initialMinStayRules,
           extraServices: initialExtraServices,
+          longTermContracts: initialLongTermContracts,
           initialized: true,
         });
       },
@@ -545,8 +582,8 @@ export const useAppStore = create<AppState>()(
         );
       },
 
-      isRoomAvailable: (roomId, checkIn, checkOut, excludeBookingId) => {
-        const { bookings, closedDates } = get();
+      isRoomAvailable: (roomId, checkIn, checkOut, excludeBookingId, excludeContractId) => {
+        const { bookings, closedDates, longTermContracts } = get();
         const room = get().rooms.find((r) => r.id === roomId);
         if (!room || room.status !== 'active') return false;
 
@@ -558,6 +595,15 @@ export const useAppStore = create<AppState>()(
             isDateOverlap(checkIn, checkOut, b.checkIn, b.checkOut)
         );
         if (hasBookingConflict) return false;
+
+        const hasLongTermConflict = longTermContracts.some(
+          (c) =>
+            c.id !== excludeContractId &&
+            c.roomId === roomId &&
+            (c.status === 'active' || c.status === 'expiring' || c.status === 'renewed') &&
+            isDateOverlap(checkIn, checkOut, c.startDate, c.endDate)
+        );
+        if (hasLongTermConflict) return false;
 
         const hasClosedDateConflict = closedDates.some(
           (cd) =>
@@ -1517,6 +1563,372 @@ export const useAppStore = create<AppState>()(
           total += service.price * multiplier * (service.chargeType === 'per_person_per_night' ? 1 : item.quantity);
         });
         return total;
+      },
+
+      addLongTermContract: (contract) => {
+        if (!get().hasPermission('longterm:create')) return false;
+        const { isRoomAvailable } = get();
+        const now = new Date().toISOString();
+        const months = contract.months || calculateMonths(contract.startDate, contract.endDate || contract.startDate);
+        const endDate = contract.endDate || addMonthsStr(contract.startDate, months);
+        const monthlyRent = contract.monthlyRent;
+        const totalAmount = monthlyRent * months;
+
+        if (!isRoomAvailable(contract.roomId, contract.startDate, endDate, undefined, undefined)) {
+          return false;
+        }
+
+        const paymentRecords: PaymentRecord[] = [];
+        for (let i = 0; i < months; i++) {
+          paymentRecords.push({
+            id: generateId(),
+            contractId: '',
+            period: getContractPeriodLabel(contract.startDate, i),
+            monthIndex: i,
+            dueDate: getMonthDueDate(contract.startDate, i),
+            amount: monthlyRent,
+            paidAmount: 0,
+            status: 'pending',
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+
+        const newContract: LongTermContract = {
+          ...contract,
+          id: generateId(),
+          guestPhone: normalizePhone(contract.guestPhone),
+          startDate: contract.startDate,
+          endDate,
+          months,
+          monthlyRent,
+          totalAmount,
+          paidAmount: 0,
+          status: 'active',
+          paymentRecords,
+          renewCount: 0,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        newContract.paymentRecords.forEach((pr) => {
+          pr.contractId = newContract.id;
+        });
+
+        set((state) => ({ longTermContracts: [...state.longTermContracts, newContract] }));
+        const room = get().getRoomById(contract.roomId);
+        get().addAuditLog(
+          'longterm:create',
+          newContract.id,
+          contract.guestName,
+          `创建长租合同: ${contract.guestName}(${contract.guestPhone}) 房间${room?.roomNumber || ''} ${contract.startDate}~${endDate} ${months}个月 月租¥${monthlyRent} 总额¥${totalAmount}`
+        );
+        return true;
+      },
+
+      updateLongTermContract: (id, contractUpdate) => {
+        if (!get().hasPermission('longterm:update')) return false;
+        const existing = get().longTermContracts.find((c) => c.id === id);
+        if (!existing) return false;
+
+        const now = new Date().toISOString();
+        const updateData: Partial<LongTermContract> = { ...contractUpdate };
+        if (updateData.guestPhone !== undefined) {
+          updateData.guestPhone = normalizePhone(updateData.guestPhone);
+        }
+        if (updateData.startDate && !updateData.endDate && !updateData.months) {
+          updateData.months = calculateMonths(updateData.startDate, existing.endDate);
+        }
+        if (updateData.months && !updateData.endDate) {
+          updateData.endDate = addMonthsStr(updateData.startDate || existing.startDate, updateData.months);
+        }
+        if (updateData.monthlyRent && !updateData.totalAmount) {
+          updateData.totalAmount = updateData.monthlyRent * (updateData.months || existing.months);
+        }
+        set((s) => ({
+          longTermContracts: s.longTermContracts.map((c) =>
+            c.id === id ? { ...c, ...updateData, updatedAt: now } : c
+          ),
+        }));
+        const changes: string[] = [];
+        if (contractUpdate.guestName && contractUpdate.guestName !== existing.guestName) changes.push('客人姓名变更');
+        if (contractUpdate.startDate || contractUpdate.endDate) changes.push('日期变更');
+        if (contractUpdate.monthlyRent !== undefined && contractUpdate.monthlyRent !== existing.monthlyRent) changes.push(`月租: ¥${existing.monthlyRent} → ¥${contractUpdate.monthlyRent}`);
+        if (contractUpdate.deposit !== undefined && contractUpdate.deposit !== existing.deposit) changes.push('押金变更');
+        get().addAuditLog(
+          'longterm:update',
+          id,
+          existing.guestName,
+          changes.length > 0
+            ? `更新长租合同: ${existing.guestName} ${changes.join('; ')}`
+            : `更新长租合同: ${existing.guestName}`
+        );
+        return true;
+      },
+
+      cancelLongTermContract: (id, reason) => {
+        if (!get().hasPermission('longterm:cancel')) return;
+        const now = new Date().toISOString();
+        const existing = get().getLongTermContractById(id);
+        set((state) => ({
+          longTermContracts: state.longTermContracts.map((c) =>
+            c.id === id
+              ? { ...c, status: 'cancelled', cancelReason: reason, updatedAt: now }
+              : c
+          ),
+        }));
+        if (existing) {
+          const room = get().getRoomById(existing.roomId);
+          get().addAuditLog(
+            'longterm:cancel',
+            id,
+            existing.guestName,
+            `取消长租合同: ${existing.guestName} 房间${room?.roomNumber || ''} 原因: ${reason}`
+          );
+        }
+      },
+
+      renewLongTermContract: (id, renewMonths, newMonthlyRent) => {
+        if (!get().hasPermission('longterm:renew')) return null;
+        const existing = get().longTermContracts.find((c) => c.id === id);
+        if (!existing) return null;
+        const now = new Date().toISOString();
+        const monthlyRent = newMonthlyRent || existing.monthlyRent;
+        const startDate = existing.endDate;
+        const endDate = addMonthsStr(startDate, renewMonths);
+        const totalAmount = monthlyRent * renewMonths;
+        const paymentRecords: PaymentRecord[] = [];
+        for (let i = 0; i < renewMonths; i++) {
+          paymentRecords.push({
+            id: generateId(),
+            contractId: '',
+            period: getContractPeriodLabel(startDate, i),
+            monthIndex: i,
+            dueDate: getMonthDueDate(startDate, i),
+            amount: monthlyRent,
+            paidAmount: 0,
+            status: 'pending',
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+        const newContract: LongTermContract = {
+          id: generateId(),
+          roomId: existing.roomId,
+          guestName: existing.guestName,
+          guestPhone: existing.guestPhone,
+          guestIdCard: existing.guestIdCard,
+          startDate,
+          endDate,
+          months: renewMonths,
+          monthlyRent,
+          deposit: existing.deposit,
+          totalAmount,
+          paidAmount: 0,
+          status: 'renewed',
+          paymentRecords,
+          renewCount: existing.renewCount + 1,
+          originalContractId: existing.id,
+          notes: existing.notes,
+          createdAt: now,
+          updatedAt: now,
+        };
+        newContract.paymentRecords.forEach((pr) => {
+          pr.contractId = newContract.id;
+        });
+        set((state) => ({
+          longTermContracts: [
+            ...state.longTermContracts.map((c) =>
+              c.id === id ? { ...c, status: 'renewed' as const, updatedAt: now } : c),
+            newContract,
+          ],
+        }));
+        const room = get().getRoomById(existing.roomId);
+        get().addAuditLog(
+          'longterm:renew',
+          newContract.id,
+          existing.guestName,
+          `续签长租合同: ${existing.guestName} 房间${room?.roomNumber || ''} ${startDate}~${endDate} ${renewMonths}个月 月租¥${monthlyRent}`
+        );
+        return newContract;
+      },
+
+      getLongTermContractById: (id) => {
+        return get().longTermContracts.find((c) => c.id === id);
+      },
+
+      getLongTermContractsByStore: (storeId) => {
+        const { longTermContracts, getRoomsByStore } = get();
+        const rooms = getRoomsByStore(storeId);
+        const roomIds = new Set(rooms.map((r) => r.id));
+        return longTermContracts.filter((c) => roomIds.has(c.roomId));
+      },
+
+      getLongTermContractsByRoom: (roomId) => {
+        return get().longTermContracts.filter((c) => c.roomId === roomId);
+      },
+
+      getActiveLongTermContractsByDate: (date, storeId = 'all') => {
+        const { getLongTermContractsByStore } = get();
+        const contracts = getLongTermContractsByStore(storeId);
+        return contracts.filter(
+          (c) =>
+            (c.status === 'active' || c.status === 'expiring' || c.status === 'renewed') &&
+            isDateOverlap(c.startDate, c.endDate, date, date)
+        );
+      },
+
+      isRoomOccupiedByLongTerm: (roomId, checkIn, checkOut, excludeContractId) => {
+        const { longTermContracts } = get();
+        return longTermContracts.some(
+          (c) =>
+            c.id !== excludeContractId &&
+            c.roomId === roomId &&
+            (c.status === 'active' || c.status === 'expiring' || c.status === 'renewed') &&
+            isDateOverlap(checkIn, checkOut, c.startDate, c.endDate)
+        );
+      },
+
+      updatePaymentRecord: (contractId, paymentId, paidAmount, paymentMethod, notes) => {
+        if (!get().hasPermission('longterm:update')) return false;
+        const state = get();
+        const contract = state.longTermContracts.find((c) => c.id === contractId);
+        if (!contract) return false;
+        const payment = contract.paymentRecords.find((p) => p.id === paymentId);
+        if (!payment) return false;
+        const now = new Date().toISOString();
+        let newStatus: PaymentStatus = 'pending';
+        if (paidAmount >= payment.amount) {
+          newStatus = 'paid';
+        } else if (paidAmount > 0) {
+          newStatus = 'partial';
+        } else {
+          const today = todayStr();
+          if (payment.dueDate < today) {
+            newStatus = 'overdue';
+          }
+        }
+        const newPaidAmount = contract.paidAmount - payment.paidAmount + paidAmount;
+        set((s) => ({
+          longTermContracts: s.longTermContracts.map((c) => {
+            if (c.id !== contractId) return c;
+            return {
+              ...c,
+              paidAmount: newPaidAmount,
+              updatedAt: now,
+              paymentRecords: c.paymentRecords.map((p) =>
+                p.id === paymentId
+                  ? {
+                      ...p,
+                      paidAmount,
+                      status: newStatus,
+                      paidAt: now,
+                      paymentMethod,
+                      notes,
+                      updatedAt: now,
+                    }
+                  : p
+              ),
+            };
+          }),
+        }));
+        const room = get().getRoomById(contract.roomId);
+        get().addAuditLog(
+          'longterm:payment',
+          contractId,
+          contract.guestName,
+          `长租租金支付: ${contract.guestName} 房间${room?.roomNumber || ''} ${payment.period} ¥${paidAmount}/${payment.amount} 方式:${paymentMethod || '未指定'}`
+        );
+        return true;
+      },
+
+      getContractExpiryInfo: (contractId) => {
+        const contract = get().getLongTermContractById(contractId);
+        if (!contract) return null;
+        const today = parseISO(todayStr());
+        const end = parseISO(contract.endDate);
+        const daysRemaining = differenceInCalendarDays(end, today);
+        let alertLevel: ExpiryAlertLevel = 'none';
+        let message = '';
+        if (contract.status === 'cancelled' || contract.status === 'expired') {
+          return { contractId, daysRemaining, alertLevel: 'none', message: '合同已结束' };
+        }
+        if (daysRemaining <= 0) {
+          alertLevel = 'urgent';
+          message = '合同已到期';
+        } else if (daysRemaining <= 7) {
+          alertLevel = 'urgent';
+          message = `还有${daysRemaining}天到期`;
+        } else if (daysRemaining <= 30) {
+          alertLevel = 'remind';
+          message = `还有${daysRemaining}天到期，建议提醒续签`;
+        } else {
+          message = `还有${daysRemaining}天到期`;
+        }
+        return { contractId, daysRemaining, alertLevel, message };
+      },
+
+      getExpiringContracts: (daysThreshold = 30, storeId = 'all') => {
+        const { getLongTermContractsByStore, getContractExpiryInfo } = get();
+        const contracts = getLongTermContractsByStore(storeId);
+        const today = todayStr();
+        return contracts
+          .filter((c) => {
+            const expiry = getContractExpiryInfo(c.id);
+            return (
+              (c.status === 'active' || c.status === 'expiring' || c.status === 'renewed') &&
+              expiry &&
+              expiry.alertLevel !== 'none' &&
+              c.endDate >= today &&
+              (expiry.alertLevel === 'urgent' || expiry.daysRemaining <= daysThreshold)
+            )
+          })
+          .sort((a, b) => {
+            const ea = getContractExpiryInfo(a.id);
+            const eb = getContractExpiryInfo(b.id);
+            return (ea?.daysRemaining ?? 0) - (eb?.daysRemaining ?? 0);
+          });
+      },
+
+      getOverduePayments: (storeId = 'all') => {
+        const { getLongTermContractsByStore } = get();
+        const contracts = getLongTermContractsByStore(storeId);
+        const today = todayStr();
+        const overdue: PaymentRecord[] = [];
+        contracts.forEach((c) => {
+          c.paymentRecords.forEach((p) => {
+            if (p.status === 'overdue' || (p.status === 'pending' && p.dueDate < today)) {
+              overdue.push(p);
+            }
+          });
+        });
+        return overdue.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      },
+
+      updateLongTermContractStatuses: () => {
+        const { longTermContracts, getContractExpiryInfo } = get();
+        const today = todayStr();
+        let changed = false;
+        const updated = longTermContracts.map((c) => {
+          if (c.status === 'cancelled' || c.status === 'renewed') return c;
+          const expiry = getContractExpiryInfo(c.id);
+          let newStatus = c.status;
+          if (c.endDate < today && c.status !== 'expired') {
+            newStatus = 'expired';
+          } else if (expiry && expiry.alertLevel === 'urgent' && expiry.daysRemaining > 0 && c.status === 'active') {
+            newStatus = 'expiring';
+          } else if (expiry && expiry.alertLevel === 'none' && expiry.daysRemaining > 30 && c.status === 'expiring') {
+            newStatus = 'active';
+          }
+          if (newStatus !== c.status) {
+            changed = true;
+            return { ...c, status: newStatus };
+          }
+          return c;
+        });
+        if (changed) {
+          set({ longTermContracts: updated });
+        }
       },
     }),
     {

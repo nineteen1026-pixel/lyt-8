@@ -12,6 +12,7 @@ import GuestDetail from '@/pages/GuestDetail';
 import CleaningTaskList from '@/pages/CleaningTaskList';
 import StoreList from '@/pages/StoreList';
 import AuditLogList from '@/pages/AuditLogList';
+import LongTermContractList from '@/pages/LongTermContractList';
 import { useAppStore } from '@/store/useAppStore';
 
 function ProtectedRoute({ permission, children }: { permission?: import('@/types').Permission; children: React.ReactNode }) {
@@ -63,6 +64,14 @@ export default function App() {
             element={
               <ProtectedRoute permission="booking:view">
                 <BookingList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/long-term"
+            element={
+              <ProtectedRoute permission="longterm:view">
+                <LongTermContractList />
               </ProtectedRoute>
             }
           />

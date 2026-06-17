@@ -42,7 +42,12 @@ export type Permission =
   | 'report:view'
   | 'report:export'
   | 'audit:view'
-  | 'user:switch';
+  | 'user:switch'
+  | 'longterm:view'
+  | 'longterm:create'
+  | 'longterm:update'
+  | 'longterm:cancel'
+  | 'longterm:renew';
 
 export const RolePermissions: Record<UserRole, Permission[]> = {
   owner: [
@@ -79,6 +84,11 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'report:export',
     'audit:view',
     'user:switch',
+    'longterm:view',
+    'longterm:create',
+    'longterm:update',
+    'longterm:cancel',
+    'longterm:renew',
   ],
   receptionist: [
     'store:view',
@@ -105,6 +115,11 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'cleaning:view',
     'cleaning:update',
     'report:view',
+    'longterm:view',
+    'longterm:create',
+    'longterm:update',
+    'longterm:cancel',
+    'longterm:renew',
   ],
 };
 
@@ -140,7 +155,12 @@ export type AuditAction =
   | 'waitlist:confirm'
   | 'waitlist:expire'
   | 'cleaning:update'
-  | 'user:switch';
+  | 'user:switch'
+  | 'longterm:create'
+  | 'longterm:update'
+  | 'longterm:cancel'
+  | 'longterm:renew'
+  | 'longterm:payment';
 
 export const AuditActionLabels: Record<AuditAction, string> = {
   'store:create': '创建门店',
@@ -168,6 +188,11 @@ export const AuditActionLabels: Record<AuditAction, string> = {
   'waitlist:expire': '候补登记过期',
   'cleaning:update': '更新保洁',
   'user:switch': '切换角色',
+  'longterm:create': '创建长租合同',
+  'longterm:update': '更新长租合同',
+  'longterm:cancel': '取消长租合同',
+  'longterm:renew': '续签长租合同',
+  'longterm:payment': '长租租金支付',
 };
 
 export interface AuditLog {
@@ -487,4 +512,86 @@ export interface WaitlistNotification {
   read: boolean;
   confirmed: boolean;
   confirmedAt?: string;
+}
+
+export type LongTermContractStatus = 'active' | 'expiring' | 'expired' | 'cancelled' | 'renewed';
+
+export const LongTermContractStatusLabels: Record<LongTermContractStatus, string> = {
+  active: '履行中',
+  expiring: '即将到期',
+  expired: '已到期',
+  cancelled: '已取消',
+  renewed: '已续签',
+};
+
+export const LongTermContractStatusColors: Record<LongTermContractStatus, string> = {
+  active: 'bg-green-100 text-green-700',
+  expiring: 'bg-amber-100 text-amber-700',
+  expired: 'bg-gray-100 text-gray-600',
+  cancelled: 'bg-red-100 text-red-600',
+  renewed: 'bg-blue-100 text-blue-700',
+};
+
+export type PaymentStatus = 'pending' | 'paid' | 'overdue' | 'partial';
+
+export const PaymentStatusLabels: Record<PaymentStatus, string> = {
+  pending: '待支付',
+  paid: '已支付',
+  overdue: '逾期',
+  partial: '部分支付',
+};
+
+export const PaymentStatusColors: Record<PaymentStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  paid: 'bg-green-100 text-green-700',
+  overdue: 'bg-red-100 text-red-600',
+  partial: 'bg-blue-100 text-blue-700',
+};
+
+export interface PaymentRecord {
+  id: string;
+  contractId: string;
+  period: string;
+  monthIndex: number;
+  dueDate: string;
+  amount: number;
+  paidAmount: number;
+  status: PaymentStatus;
+  paidAt?: string;
+  paymentMethod?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LongTermContract {
+  id: string;
+  roomId: string;
+  guestName: string;
+  guestPhone: string;
+  guestIdCard?: string;
+  startDate: string;
+  endDate: string;
+  months: number;
+  monthlyRent: number;
+  deposit: number;
+  totalAmount: number;
+  paidAmount: number;
+  status: LongTermContractStatus;
+  paymentRecords: PaymentRecord[];
+  renewCount: number;
+  originalContractId?: string;
+  notes?: string;
+  cancelReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ExpiryAlertLevel = 'none' | 'remind' | 'urgent';
+
+export interface ContractExpiryInfo {
+  contractId: string;
+  daysRemaining: number;
+  alertLevel: ExpiryAlertLevel;
+  message: string;
 }
