@@ -1660,10 +1660,10 @@ export const useAppStore = create<AppState>()(
         let newTotalAmount = newMonthlyRent * newMonths;
 
         if (needRecalcPayments) {
-          const paidRecords = existing.paymentRecords.filter((p) => p.paidAmount > 0);
+          const allPaidRecords = existing.paymentRecords.filter((p) => p.paidAmount > 0);
           newPaymentRecords = [];
           for (let i = 0; i < newMonths; i++) {
-            const matchingPaid = paidRecords.find((p) => p.monthIndex === i);
+            const matchingPaid = allPaidRecords.find((p) => p.monthIndex === i);
             if (matchingPaid) {
               newPaymentRecords.push({
                 ...matchingPaid,
@@ -1686,6 +1686,15 @@ export const useAppStore = create<AppState>()(
                 updatedAt: now,
               });
             }
+          }
+          const extraPaid = allPaidRecords.filter((p) => p.monthIndex >= newMonths);
+          if (extraPaid.length > 0) {
+            extraPaid.forEach((p) => {
+              newPaymentRecords.push({
+                ...p,
+                updatedAt: now,
+              });
+            });
           }
           newPaidAmount = newPaymentRecords.reduce((sum, p) => sum + p.paidAmount, 0);
         }
