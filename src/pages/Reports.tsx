@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   BarChart3,
   TrendingUp,
@@ -30,8 +30,9 @@ export default function Reports() {
     stores,
     getDailyReport,
     getMonthlyReport,
-    getRevenueStats,
+    hasPermission,
   } = useAppStore();
+  const canExport = hasPermission('report:export');
   const [storeFilter, setStoreFilter] = useState<string>('all');
   const [granularity, setGranularity] = useState<ReportGranularity>('month');
   const [startDate, setStartDate] = useState(() => {
@@ -40,8 +41,6 @@ export default function Reports() {
   });
   const [endDate, setEndDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
-
-  const revenueStats = getRevenueStats(storeFilter);
 
   const displayStart = granularity === 'day' ? startDate : getMonthKey(startDate);
   const displayEnd = granularity === 'day' ? endDate : getMonthKey(endDate);
@@ -251,13 +250,15 @@ export default function Reports() {
           <h1 className="font-display text-2xl font-bold text-brand-brown">经营报表</h1>
           <p className="text-brand-taupe mt-1">查看营收与入住率统计数据</p>
         </div>
-        <button
-          onClick={exportCSV}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Download className="w-4 h-4" />
-          导出报表
-        </button>
+        {canExport && (
+          <button
+            onClick={exportCSV}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            导出报表
+          </button>
+        )}
       </div>
 
       <div className="card-base p-4 mb-6">

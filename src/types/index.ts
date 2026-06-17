@@ -2,6 +2,129 @@ export type RoomType = 'standard' | 'deluxe' | 'suite' | 'family';
 export type BedType = 'single' | 'double' | 'twin' | 'king';
 export type RoomStatus = 'active' | 'maintenance' | 'inactive';
 
+export type UserRole = 'owner' | 'receptionist';
+
+export const UserRoleLabels: Record<UserRole, string> = {
+  owner: '老板',
+  receptionist: '前台',
+};
+
+export type Permission =
+  | 'store:view'
+  | 'store:create'
+  | 'store:update'
+  | 'store:delete'
+  | 'room:view'
+  | 'room:create'
+  | 'room:update'
+  | 'room:delete'
+  | 'room:rules'
+  | 'booking:view'
+  | 'booking:create'
+  | 'booking:update'
+  | 'booking:cancel'
+  | 'booking:checkin'
+  | 'booking:checkout'
+  | 'guest:view'
+  | 'cleaning:view'
+  | 'cleaning:update'
+  | 'report:view'
+  | 'report:export'
+  | 'audit:view'
+  | 'user:switch';
+
+export const RolePermissions: Record<UserRole, Permission[]> = {
+  owner: [
+    'store:view',
+    'store:create',
+    'store:update',
+    'store:delete',
+    'room:view',
+    'room:create',
+    'room:update',
+    'room:delete',
+    'room:rules',
+    'booking:view',
+    'booking:create',
+    'booking:update',
+    'booking:cancel',
+    'booking:checkin',
+    'booking:checkout',
+    'guest:view',
+    'cleaning:view',
+    'cleaning:update',
+    'report:view',
+    'report:export',
+    'audit:view',
+    'user:switch',
+  ],
+  receptionist: [
+    'store:view',
+    'room:view',
+    'room:rules',
+    'booking:view',
+    'booking:create',
+    'booking:update',
+    'booking:cancel',
+    'booking:checkin',
+    'booking:checkout',
+    'guest:view',
+    'cleaning:view',
+    'cleaning:update',
+    'report:view',
+  ],
+};
+
+export interface User {
+  id: string;
+  name: string;
+  role: UserRole;
+  avatar?: string;
+}
+
+export type AuditAction =
+  | 'store:create'
+  | 'store:update'
+  | 'store:delete'
+  | 'room:create'
+  | 'room:update'
+  | 'room:delete'
+  | 'booking:create'
+  | 'booking:update'
+  | 'booking:cancel'
+  | 'booking:checkin'
+  | 'booking:checkout'
+  | 'cleaning:update'
+  | 'user:switch';
+
+export const AuditActionLabels: Record<AuditAction, string> = {
+  'store:create': '创建门店',
+  'store:update': '更新门店',
+  'store:delete': '删除门店',
+  'room:create': '创建房间',
+  'room:update': '更新房间',
+  'room:delete': '删除房间',
+  'booking:create': '创建预订',
+  'booking:update': '更新预订',
+  'booking:cancel': '取消预订',
+  'booking:checkin': '办理入住',
+  'booking:checkout': '办理退房',
+  'cleaning:update': '更新保洁',
+  'user:switch': '切换角色',
+};
+
+export interface AuditLog {
+  id: string;
+  action: AuditAction;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  targetId?: string;
+  targetName?: string;
+  details?: string;
+  createdAt: string;
+}
+
 export interface Store {
   id: string;
   name: string;

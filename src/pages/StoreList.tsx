@@ -6,7 +6,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import StoreForm from './StoreForm';
 
 export default function StoreList() {
-  const { stores, addStore, updateStore, deleteStore, getRoomsByStore, getRevenueStats } = useAppStore();
+  const { stores, addStore, updateStore, deleteStore, getRoomsByStore, getRevenueStats, hasPermission } = useAppStore();
   const [formOpen, setFormOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Store | null>(null);
@@ -56,21 +56,29 @@ export default function StoreList() {
           <h1 className="font-display text-2xl font-bold text-brand-brown">门店管理</h1>
           <p className="text-brand-taupe mt-1">管理所有门店的基础信息</p>
         </div>
-        <button onClick={handleAdd} className="btn-primary">
-          <Plus className="w-4 h-4" />
-          新增门店
-        </button>
+        {hasPermission('store:create') && (
+          <button onClick={handleAdd} className="btn-primary">
+            <Plus className="w-4 h-4" />
+            新增门店
+          </button>
+        )}
       </div>
 
       {stores.length === 0 ? (
         <div className="card-base p-12 text-center">
           <Building2 className="w-16 h-16 mx-auto text-brand-brown/30 mb-4" />
           <h3 className="font-display text-lg text-brand-brown mb-2">暂无门店</h3>
-          <p className="text-brand-taupe mb-6">点击上方按钮添加您的第一个门店</p>
-          <button onClick={handleAdd} className="btn-primary">
-            <Plus className="w-4 h-4" />
-            新增门店
-          </button>
+          {hasPermission('store:create') ? (
+            <>
+              <p className="text-brand-taupe mb-6">点击上方按钮添加您的第一个门店</p>
+              <button onClick={handleAdd} className="btn-primary">
+                <Plus className="w-4 h-4" />
+                新增门店
+              </button>
+            </>
+          ) : (
+            <p className="text-brand-taupe">暂无权限创建门店</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -99,20 +107,24 @@ export default function StoreList() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button
-                      onClick={() => handleEdit(store)}
-                      className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
-                      title="编辑"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(store)}
-                      className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
-                      title="删除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {hasPermission('store:update') && (
+                      <button
+                        onClick={() => handleEdit(store)}
+                        className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                        title="编辑"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {hasPermission('store:delete') && (
+                      <button
+                        onClick={() => handleDeleteClick(store)}
+                        className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 

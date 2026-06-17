@@ -9,7 +9,11 @@ import RoomForm from './RoomForm';
 import RoomRulesModal from './RoomRulesModal';
 
 export default function RoomList() {
-  const { stores, getRoomsByStore, addRoom, updateRoom, deleteRoom, getBookingsByRoom, getStoreById } = useAppStore();
+  const { stores, getRoomsByStore, addRoom, updateRoom, deleteRoom, getBookingsByRoom, getStoreById, hasPermission } = useAppStore();
+  const canCreateRoom = hasPermission('room:create');
+  const canUpdateRoom = hasPermission('room:update');
+  const canDeleteRoom = hasPermission('room:delete');
+  const canManageRoomRules = hasPermission('room:rules');
   const [formOpen, setFormOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
@@ -88,10 +92,12 @@ export default function RoomList() {
           <h1 className="font-display text-2xl font-bold text-brand-brown">房间管理</h1>
           <p className="text-brand-taupe mt-1">管理所有民宿房间的档案信息</p>
         </div>
-        <button onClick={handleAdd} className="btn-primary">
-          <Plus className="w-4 h-4" />
-          新增房间
-        </button>
+        {canCreateRoom && (
+          <button onClick={handleAdd} className="btn-primary">
+            <Plus className="w-4 h-4" />
+            新增房间
+          </button>
+        )}
       </div>
 
       <div className="card-base p-4 mb-5">
@@ -120,10 +126,12 @@ export default function RoomList() {
           <BedDouble className="w-16 h-16 mx-auto text-brand-brown/30 mb-4" />
           <h3 className="font-display text-lg text-brand-brown mb-2">暂无房间</h3>
           <p className="text-brand-taupe mb-6">点击上方按钮添加您的第一个房间</p>
-          <button onClick={handleAdd} className="btn-primary">
-            <Plus className="w-4 h-4" />
-            新增房间
-          </button>
+          {canCreateRoom && (
+            <button onClick={handleAdd} className="btn-primary">
+              <Plus className="w-4 h-4" />
+              新增房间
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -153,27 +161,33 @@ export default function RoomList() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button
-                      onClick={() => handleOpenRules(room)}
-                      className="p-2 rounded-lg text-brand-taupe hover:bg-brand-sage/20 hover:text-brand-green transition-colors"
-                      title="房间规则"
-                    >
-                      <Calendar className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(room)}
-                      className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
-                      title="编辑"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(room)}
-                      className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
-                      title="删除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canManageRoomRules && (
+                      <button
+                        onClick={() => handleOpenRules(room)}
+                        className="p-2 rounded-lg text-brand-taupe hover:bg-brand-sage/20 hover:text-brand-green transition-colors"
+                        title="房间规则"
+                      >
+                        <Calendar className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canUpdateRoom && (
+                      <button
+                        onClick={() => handleEdit(room)}
+                        className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                        title="编辑"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canDeleteRoom && (
+                      <button
+                        onClick={() => handleDeleteClick(room)}
+                        className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 

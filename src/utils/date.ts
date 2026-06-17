@@ -151,3 +151,8 @@ export function endOfMonthStr(date: string | Date): string {
   const d = typeof date === 'string' ? parseISO(date) : date;
   return format(endOfMonth(d), 'yyyy-MM-dd');
 }
+
+export function formatDateTimeDisplay(date: string | Date): string {
+  const d = typeof date === 'string' ? parseISO(date) : date;
+  return format(d, 'yyyy年M月d日 HH:mm', { locale: zhCN });
+}

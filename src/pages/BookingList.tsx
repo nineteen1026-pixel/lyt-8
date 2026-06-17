@@ -25,7 +25,14 @@ export default function BookingList() {
     getGuestProfiles,
     getStoreById,
     updateBookingStatus,
+    hasPermission,
   } = useAppStore();
+
+  const canCreateBooking = hasPermission('booking:create');
+  const canUpdateBooking = hasPermission('booking:update');
+  const canCancelBooking = hasPermission('booking:cancel');
+  const canCheckIn = hasPermission('booking:checkin');
+  const canCheckOut = hasPermission('booking:checkout');
 
   const [search, setSearch] = useState('');
   const [storeFilter, setStoreFilter] = useState<string>('all');
@@ -152,10 +159,12 @@ export default function BookingList() {
           <h1 className="font-display text-2xl font-bold text-brand-brown">预订管理</h1>
           <p className="text-brand-taupe mt-1">查看和管理所有预订记录</p>
         </div>
-        <button onClick={handleAdd} className="btn-primary">
-          <Plus className="w-4 h-4" />
-          新增预订
-        </button>
+        {canCreateBooking && (
+          <button onClick={handleAdd} className="btn-primary">
+            <Plus className="w-4 h-4" />
+            新增预订
+          </button>
+        )}
       </div>
 
       <div className="card-base p-4 mb-5">
@@ -229,11 +238,18 @@ export default function BookingList() {
           <div className="p-16 text-center">
             <Calendar className="w-16 h-16 mx-auto text-brand-brown/30 mb-4" />
             <h3 className="font-display text-lg text-brand-brown mb-2">暂无预订记录</h3>
-            <p className="text-brand-taupe mb-6">点击上方按钮添加您的第一个预订</p>
-            <button onClick={handleAdd} className="btn-primary">
-              <Plus className="w-4 h-4" />
-              新增预订
-            </button>
+            {canCreateBooking && (
+              <>
+                <p className="text-brand-taupe mb-6">点击上方按钮添加您的第一个预订</p>
+                <button onClick={handleAdd} className="btn-primary">
+                  <Plus className="w-4 h-4" />
+                  新增预订
+                </button>
+              </>
+            )}
+            {!canCreateBooking && (
+              <p className="text-brand-taupe">暂无权限创建预订</p>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -380,20 +396,24 @@ export default function BookingList() {
                           </button>
                           {b.status !== 'cancelled' && b.status !== 'checked-out' && (
                             <>
-                              <button
-                                onClick={() => handleEdit(b)}
-                                className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
-                                title="编辑"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleCancelClick(b)}
-                                className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
-                                title="取消预订"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
+                              {canUpdateBooking && (
+                                <button
+                                  onClick={() => handleEdit(b)}
+                                  className="p-2 rounded-lg text-brand-taupe hover:bg-brand-beige hover:text-brand-brown transition-colors"
+                                  title="编辑"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                              )}
+                              {canCancelBooking && (
+                                <button
+                                  onClick={() => handleCancelClick(b)}
+                                  className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
+                                  title="取消预订"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -564,7 +584,7 @@ export default function BookingList() {
                 {BookingStatusLabels[detailBooking.status]}
               </span>
               <div className="flex gap-2">
-                {detailBooking.status === 'confirmed' && (
+                {detailBooking.status === 'confirmed' && canCheckIn && (
                   <button
                     onClick={() => handleStatusUpdate(detailBooking, 'checked-in')}
                     className="btn-primary !py-1.5 !px-4 text-sm"
@@ -573,7 +593,7 @@ export default function BookingList() {
                     办理入住
                   </button>
                 )}
-                {detailBooking.status === 'checked-in' && (
+                {detailBooking.status === 'checked-in' && canCheckOut && (
                   <button
                     onClick={() => handleStatusUpdate(detailBooking, 'checked-out')}
                     className="btn-primary !py-1.5 !px-4 text-sm"
@@ -583,7 +603,8 @@ export default function BookingList() {
                   </button>
                 )}
                 {detailBooking.status !== 'cancelled' &&
-                  detailBooking.status !== 'checked-out' && (
+                  detailBooking.status !== 'checked-out' &&
+                  canUpdateBooking && (
                     <button
                       onClick={() => {
                         handleEdit(detailBooking);

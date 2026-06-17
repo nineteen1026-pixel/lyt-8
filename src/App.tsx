@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import Dashboard from '@/pages/Dashboard';
 import RoomList from '@/pages/RoomList';
@@ -10,7 +10,16 @@ import GuestList from '@/pages/GuestList';
 import GuestDetail from '@/pages/GuestDetail';
 import CleaningTaskList from '@/pages/CleaningTaskList';
 import StoreList from '@/pages/StoreList';
+import AuditLogList from '@/pages/AuditLogList';
 import { useAppStore } from '@/store/useAppStore';
+
+function ProtectedRoute({ permission, children }: { permission?: import('@/types').Permission; children: React.ReactNode }) {
+  const hasPermission = useAppStore((s) => s.hasPermission);
+  if (permission && !hasPermission(permission)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
 
 export default function App() {
   const initializeData = useAppStore((s) => s.initializeData);
@@ -24,14 +33,78 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/stores" element={<StoreList />} />
-          <Route path="/rooms" element={<RoomList />} />
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/bookings" element={<BookingList />} />
-          <Route path="/cleaning-tasks" element={<CleaningTaskList />} />
-          <Route path="/guests" element={<GuestList />} />
-          <Route path="/guests/:phone" element={<GuestDetail />} />
-          <Route path="/reports" element={<Reports />} />
+          <Route
+            path="/stores"
+            element={
+              <ProtectedRoute permission="store:view">
+                <StoreList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/rooms"
+            element={
+              <ProtectedRoute permission="room:view">
+                <RoomList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <ProtectedRoute permission="booking:view">
+                <Calendar />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/bookings"
+            element={
+              <ProtectedRoute permission="booking:view">
+                <BookingList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cleaning-tasks"
+            element={
+              <ProtectedRoute permission="cleaning:view">
+                <CleaningTaskList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/guests"
+            element={
+              <ProtectedRoute permission="guest:view">
+                <GuestList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/guests/:phone"
+            element={
+              <ProtectedRoute permission="guest:view">
+                <GuestDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute permission="report:view">
+                <Reports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/audit-logs"
+            element={
+              <ProtectedRoute permission="audit:view">
+                <AuditLogList />
+              </ProtectedRoute>
+            }
+          />
         </Route>
       </Routes>
     </Router>

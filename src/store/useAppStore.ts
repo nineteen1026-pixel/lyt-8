@@ -12,15 +12,24 @@ import type {
   CleaningTaskStatus,
   Store,
   ClosedDate,
-  ClosedDateReason,
   MinStayRule,
+  User,
+  UserRole,
+  Permission,
+  AuditLog,
+  AuditAction,
 } from '@/types';
-import { normalizePhone } from '@/types';
+import { normalizePhone, RolePermissions } from '@/types';
 import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate } from '@/utils/date';
 import { differenceInDays, parseISO } from 'date-fns';
 import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules } from '@/utils/mockData';
 
 type StoreIdFilter = string | 'all';
+
+const defaultUsers: User[] = [
+  { id: 'owner-1', name: '民宿老板', role: 'owner' },
+  { id: 'receptionist-1', name: '前台小王', role: 'receptionist' },
+];
 
 interface AppState {
   stores: Store[];
@@ -29,9 +38,19 @@ interface AppState {
   cleaningTasks: CleaningTask[];
   closedDates: ClosedDate[];
   minStayRules: MinStayRule[];
+  users: User[];
+  currentUser: User;
+  auditLogs: AuditLog[];
   initialized: boolean;
 
   initializeData: () => void;
+
+  switchUser: (userId: string) => void;
+  hasPermission: (permission: Permission) => boolean;
+  getCurrentUserRole: () => UserRole;
+
+  addAuditLog: (action: AuditAction, targetId?: string, targetName?: string, details?: string) => void;
+  getAuditLogs: () => AuditLog[];
 
   addStore: (store: Omit<Store, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateStore: (id: string, store: Partial<Store>) => void;
@@ -127,6 +146,9 @@ export const useAppStore = create<AppState>()(
       cleaningTasks: [],
       closedDates: [],
       minStayRules: [],
+      users: defaultUsers,
+      currentUser: defaultUsers[0],
+      auditLogs: [],
       initialized: false,
 
       initializeData: () => {
@@ -160,6 +182,51 @@ export const useAppStore = create<AppState>()(
         });
       },
 
+      switchUser: (userId) => {
+        const user = get().users.find((u) => u.id === userId);
+        if (user) {
+          const prevUser = get().currentUser;
+          set({ currentUser: user });
+          get().addAuditLog(
+            'user:switch',
+            user.id,
+            user.name,
+            `从「${prevUser.name}(${prevUser.role === 'owner' ? '老板' : '前台'})」切换为「${user.name}(${user.role === 'owner' ? '老板' : '前台'})」`
+          );
+        }
+      },
+
+      hasPermission: (permission) => {
+        const { currentUser } = get();
+        return RolePermissions[currentUser.role].includes(permission);
+      },
+
+      getCurrentUserRole: () => {
+        return get().currentUser.role;
+      },
+
+      addAuditLog: (action, targetId, targetName, details) => {
+        const { currentUser } = get();
+        const log: AuditLog = {
+          id: generateId(),
+          action,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          targetId,
+          targetName,
+          details,
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          auditLogs: [log, ...state.auditLogs].slice(0, 500),
+        }));
+      },
+
+      getAuditLogs: () => {
+        return get().auditLogs;
+      },
+
       addStore: (store) => {
         const now = new Date().toISOString();
         const newStore: Store = {
@@ -169,15 +236,24 @@ export const useAppStore = create<AppState>()(
           updatedAt: now,
         };
         set((state) => ({ stores: [...state.stores, newStore] }));
+        get().addAuditLog('store:create', newStore.id, newStore.name, `创建门店「${newStore.name}」`);
       },
 
       updateStore: (id, store) => {
         const now = new Date().toISOString();
+        const oldStore = get().getStoreById(id);
         set((state) => ({
           stores: state.stores.map((s) =>
             s.id === id ? { ...s, ...store, updatedAt: now } : s
           ),
         }));
+        if (oldStore) {
+          const changes: string[] = [];
+          if (store.name && store.name !== oldStore.name) changes.push(`名称: ${oldStore.name} → ${store.name}`);
+          if (store.address && store.address !== oldStore.address) changes.push(`地址变更`);
+          if (store.phone && store.phone !== oldStore.phone) changes.push(`电话变更`);
+          get().addAuditLog('store:update', id, oldStore.name, changes.length > 0 ? changes.join('; ') : `更新门店「${oldStore.name}」信息`);
+        }
       },
 
       deleteStore: (id) => {
@@ -185,9 +261,13 @@ export const useAppStore = create<AppState>()(
         const hasRooms = rooms.some((r) => r.storeId === id);
         if (hasRooms) return false;
 
+        const targetStore = get().getStoreById(id);
         set((state) => ({
           stores: state.stores.filter((s) => s.id !== id),
         }));
+        if (targetStore) {
+          get().addAuditLog('store:delete', id, targetStore.name, `删除门店「${targetStore.name}」`);
+        }
         return true;
       },
 
@@ -204,15 +284,25 @@ export const useAppStore = create<AppState>()(
           updatedAt: now,
         };
         set((state) => ({ rooms: [...state.rooms, newRoom] }));
+        const store = get().getStoreById(room.storeId);
+        get().addAuditLog('room:create', newRoom.id, newRoom.roomNumber, `创建房间「${newRoom.roomNumber} ${newRoom.name}」(门店: ${store?.name || '未知'})`);
       },
 
       updateRoom: (id, room) => {
         const now = new Date().toISOString();
+        const oldRoom = get().getRoomById(id);
         set((state) => ({
           rooms: state.rooms.map((r) =>
             r.id === id ? { ...r, ...room, updatedAt: now } : r
           ),
         }));
+        if (oldRoom) {
+          const changes: string[] = [];
+          if (room.roomNumber && room.roomNumber !== oldRoom.roomNumber) changes.push(`房号: ${oldRoom.roomNumber} → ${room.roomNumber}`);
+          if (room.price !== undefined && room.price !== oldRoom.price) changes.push(`价格: ¥${oldRoom.price} → ¥${room.price}`);
+          if (room.status && room.status !== oldRoom.status) changes.push(`状态变更`);
+          get().addAuditLog('room:update', id, oldRoom.roomNumber, changes.length > 0 ? changes.join('; ') : `更新房间「${oldRoom.roomNumber} ${oldRoom.name}」`);
+        }
       },
 
       deleteRoom: (id) => {
@@ -225,9 +315,13 @@ export const useAppStore = create<AppState>()(
         );
         if (hasActiveBooking) return false;
 
+        const targetRoom = get().getRoomById(id);
         set((state) => ({
           rooms: state.rooms.filter((r) => r.id !== id),
         }));
+        if (targetRoom) {
+          get().addAuditLog('room:delete', id, targetRoom.roomNumber, `删除房间「${targetRoom.roomNumber} ${targetRoom.name}」`);
+        }
         return true;
       },
 
@@ -256,6 +350,8 @@ export const useAppStore = create<AppState>()(
           updatedAt: now,
         };
         set((state) => ({ bookings: [...state.bookings, newBooking] }));
+        const room = get().getRoomById(booking.roomId);
+        get().addAuditLog('booking:create', newBooking.id, booking.guestName, `创建预订: ${booking.guestName}(${booking.guestPhone}) 房间${room?.roomNumber || ''} ${booking.checkIn}~${booking.checkOut} ¥${booking.totalPrice}`);
         return true;
       },
 
@@ -288,11 +384,17 @@ export const useAppStore = create<AppState>()(
             b.id === id ? { ...b, ...updateData, updatedAt: now } : b
           ),
         }));
+        const changes: string[] = [];
+        if (booking.guestName && booking.guestName !== existing.guestName) changes.push('客人姓名变更');
+        if (booking.checkIn || booking.checkOut) changes.push(`日期: ${existing.checkIn}~${existing.checkOut} → ${checkIn}~${checkOut}`);
+        if (booking.totalPrice !== undefined && booking.totalPrice !== existing.totalPrice) changes.push(`金额: ¥${existing.totalPrice} → ¥${booking.totalPrice}`);
+        get().addAuditLog('booking:update', id, existing.guestName, changes.length > 0 ? changes.join('; ') : `更新预订: ${existing.guestName}`);
         return true;
       },
 
       cancelBooking: (id, reason) => {
         const now = new Date().toISOString();
+        const existing = get().getBookingById(id);
         set((state) => ({
           bookings: state.bookings.map((b) =>
             b.id === id
@@ -300,6 +402,9 @@ export const useAppStore = create<AppState>()(
               : b
           ),
         }));
+        if (existing) {
+          get().addAuditLog('booking:cancel', id, existing.guestName, `取消预订: ${existing.guestName} 原因: ${reason}`);
+        }
       },
 
       updateBookingStatus: (id, status) => {
@@ -310,6 +415,14 @@ export const useAppStore = create<AppState>()(
             b.id === id ? { ...b, status, updatedAt: now } : b
           ),
         }));
+
+        if (booking) {
+          if (status === 'checked-in') {
+            get().addAuditLog('booking:checkin', id, booking.guestName, `办理入住: ${booking.guestName} 房间${get().getRoomById(booking.roomId)?.roomNumber || ''}`);
+          } else if (status === 'checked-out') {
+            get().addAuditLog('booking:checkout', id, booking.guestName, `办理退房: ${booking.guestName} 房间${get().getRoomById(booking.roomId)?.roomNumber || ''}`);
+          }
+        }
 
         if (status === 'checked-out' && booking) {
           const today = todayStr();
@@ -742,21 +855,31 @@ export const useAppStore = create<AppState>()(
 
       updateCleaningTask: (id, task) => {
         const now = new Date().toISOString();
+        const oldTask = get().cleaningTasks.find((t) => t.id === id);
         set((state) => ({
           cleaningTasks: state.cleaningTasks.map((t) =>
             t.id === id ? { ...t, ...task, updatedAt: now } : t
           ),
         }));
+        if (oldTask) {
+          const room = get().getRoomById(oldTask.roomId);
+          get().addAuditLog('cleaning:update', id, room?.roomNumber, `更新保洁任务 房间${room?.roomNumber || ''}`);
+        }
       },
 
       updateCleaningTaskStatus: (id, status) => {
         const now = new Date().toISOString();
         const completedAt = status === 'completed' ? now : undefined;
+        const oldTask = get().cleaningTasks.find((t) => t.id === id);
         set((state) => ({
           cleaningTasks: state.cleaningTasks.map((t) =>
             t.id === id ? { ...t, status, updatedAt: now, completedAt } : t
           ),
         }));
+        if (oldTask) {
+          const room = get().getRoomById(oldTask.roomId);
+          get().addAuditLog('cleaning:update', id, room?.roomNumber, `保洁任务状态变更: ${room?.roomNumber || ''} → ${status === 'completed' ? '已完成' : status === 'in-progress' ? '进行中' : '待处理'}`);
+        }
       },
 
       deleteCleaningTask: (id) => {

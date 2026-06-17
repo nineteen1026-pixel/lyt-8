@@ -20,8 +20,6 @@ import { formatDateDisplay } from '@/utils/date';
 export default function CleaningTaskList() {
   const {
     stores,
-    cleaningTasks,
-    rooms,
     addCleaningTask,
     updateCleaningTaskStatus,
     deleteCleaningTask,
@@ -29,7 +27,10 @@ export default function CleaningTaskList() {
     getRoomsByStore,
     getCleaningTasksByStore,
     getStoreById,
+    hasPermission,
   } = useAppStore();
+
+  const canUpdateCleaning = hasPermission('cleaning:update');
 
   const [search, setSearch] = useState('');
   const [storeFilter, setStoreFilter] = useState<string>('all');
@@ -119,10 +120,12 @@ export default function CleaningTaskList() {
           <h1 className="font-display text-2xl font-bold text-brand-brown">保洁工单管理</h1>
           <p className="text-brand-taupe mt-1">管理所有房间的保洁任务</p>
         </div>
-        <button onClick={handleOpenForm} className="btn-primary">
-          <Plus className="w-4 h-4" />
-          新增保洁任务
-        </button>
+        {canUpdateCleaning && (
+          <button onClick={handleOpenForm} className="btn-primary">
+            <Plus className="w-4 h-4" />
+            新增保洁任务
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -203,10 +206,12 @@ export default function CleaningTaskList() {
             <Sparkles className="w-16 h-16 mx-auto text-brand-brown/30 mb-4" />
             <h3 className="font-display text-lg text-brand-brown mb-2">暂无保洁任务</h3>
             <p className="text-brand-taupe mb-6">退房后会自动生成保洁任务，也可手动添加</p>
-            <button onClick={handleOpenForm} className="btn-primary">
-              <Plus className="w-4 h-4" />
-              新增保洁任务
-            </button>
+            {canUpdateCleaning && (
+              <button onClick={handleOpenForm} className="btn-primary">
+                <Plus className="w-4 h-4" />
+                新增保洁任务
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -297,31 +302,35 @@ export default function CleaningTaskList() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1">
-                          {task.status === 'pending' && (
-                            <button
-                              onClick={() => handleStatusChange(task, 'in-progress')}
-                              className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                              title="开始保洁"
-                            >
-                              <Play className="w-4 h-4" />
-                            </button>
+                          {canUpdateCleaning && (
+                            <>
+                              {task.status === 'pending' && (
+                                <button
+                                  onClick={() => handleStatusChange(task, 'in-progress')}
+                                  className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                                  title="开始保洁"
+                                >
+                                  <Play className="w-4 h-4" />
+                                </button>
+                              )}
+                              {(task.status === 'pending' || task.status === 'in-progress') && (
+                                <button
+                                  onClick={() => handleStatusChange(task, 'completed')}
+                                  className="p-2 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
+                                  title="标记完成"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteClick(task)}
+                                className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
+                                title="删除"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
-                          {(task.status === 'pending' || task.status === 'in-progress') && (
-                            <button
-                              onClick={() => handleStatusChange(task, 'completed')}
-                              className="p-2 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
-                              title="标记完成"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteClick(task)}
-                            className="p-2 rounded-lg text-brand-taupe hover:bg-red-50 hover:text-red-500 transition-colors"
-                            title="删除"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
                         </div>
                       </td>
                     </tr>
