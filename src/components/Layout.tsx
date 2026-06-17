@@ -17,6 +17,7 @@ import {
   Crown,
   ListTodo,
   FileSignature,
+  Tag,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Permission } from '@/types';
@@ -34,6 +35,7 @@ const allNavItems: NavItem[] = [
   { path: '/stores', label: '门店管理', icon: Building2, permission: 'store:view' },
   { path: '/rooms', label: '房间管理', icon: BedDouble, permission: 'room:view' },
   { path: '/calendar', label: '日历视图', icon: CalendarDays, permission: 'booking:view' },
+  { path: '/holiday-pricing', label: '节假日调价', icon: Tag, permission: 'holidaypricing:view' },
   { path: '/bookings', label: '预订管理', icon: ClipboardList, permission: 'booking:view' },
   { path: '/long-term', label: '长租管理', icon: FileSignature, permission: 'longterm:view' },
   { path: '/waitlist', label: '候补队列', icon: ListTodo, permission: 'waitlist:view' },

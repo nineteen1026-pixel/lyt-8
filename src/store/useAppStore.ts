@@ -29,11 +29,12 @@ import type {
   PaymentStatus,
   ContractExpiryInfo,
   ExpiryAlertLevel,
+  HolidayPricingTemplate,
 } from '@/types';
-import { normalizePhone, RolePermissions, ClosedDateReasonLabels, LongTermContractStatusLabels } from '@/types';
-import { generateId, isDateOverlap, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate, calculateMonths, addMonthsStr, getContractPeriodLabel, getMonthDueDate } from '@/utils/date';
+import { normalizePhone, RolePermissions, ClosedDateReasonLabels, LongTermContractStatusLabels, PriceAdjustmentTypeLabels } from '@/types';
+import { generateId, isDateOverlap, isDateInRange, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate, calculateMonths, addMonthsStr, getContractPeriodLabel, getMonthDueDate } from '@/utils/date';
 import { differenceInDays, differenceInCalendarDays, parseISO } from 'date-fns';
-import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules, getInitialExtraServices, getInitialLongTermContracts } from '@/utils/mockData';
+import { getInitialStores, getInitialRooms, getInitialBookings, getInitialClosedDates, getInitialMinStayRules, getInitialExtraServices, getInitialLongTermContracts, getInitialHolidayPricingTemplates } from '@/utils/mockData';
 
 type StoreIdFilter = string | 'all';
 
@@ -177,6 +178,7 @@ interface AppState {
   };
 
   longTermContracts: LongTermContract[];
+  holidayPricingTemplates: HolidayPricingTemplate[];
   addLongTermContract: (contract: Omit<LongTermContract, 'id' | 'createdAt' | 'updatedAt' | 'paymentRecords' | 'status' | 'paidAmount' | 'totalAmount' | 'months' | 'endDate' | 'renewCount'> & { endDate?: string; months?: number }) => boolean;
   updateLongTermContract: (id: string, contract: Partial<LongTermContract>) => boolean;
   cancelLongTermContract: (id: string, reason: string) => void;
@@ -192,6 +194,13 @@ interface AppState {
   getOverduePayments: (storeId?: StoreIdFilter) => PaymentRecord[];
   updateLongTermContractStatuses: () => void;
   updatePaymentRecordStatuses: () => void;
+
+  addHolidayPricingTemplate: (template: Omit<HolidayPricingTemplate, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateHolidayPricingTemplate: (id: string, template: Partial<HolidayPricingTemplate>) => void;
+  deleteHolidayPricingTemplate: (id: string) => void;
+  getHolidayPricingTemplates: () => HolidayPricingTemplate[];
+  getAdjustedPriceForRoom: (roomId: string, date: string) => number | null;
+  getRoomAdjustedPrices: (roomId: string, startDate: string, endDate: string) => Record<string, number>;
 }
 
 export const useAppStore = create<AppState>()(
@@ -207,6 +216,7 @@ export const useAppStore = create<AppState>()(
       waitlistEntries: [],
       waitlistNotifications: [],
       longTermContracts: [],
+      holidayPricingTemplates: [],
       users: defaultUsers,
       currentUser: defaultUsers[0],
       auditLogs: [],
@@ -270,6 +280,7 @@ export const useAppStore = create<AppState>()(
         const initialMinStayRules = getInitialMinStayRules(initialRooms);
         const initialExtraServices = getInitialExtraServices(initialStores);
         const initialLongTermContracts = getInitialLongTermContracts(initialRooms);
+        const initialHolidayPricingTemplates = getInitialHolidayPricingTemplates(initialRooms);
         set({
           stores: initialStores,
           rooms: initialRooms,
@@ -278,6 +289,7 @@ export const useAppStore = create<AppState>()(
           minStayRules: initialMinStayRules,
           extraServices: initialExtraServices,
           longTermContracts: initialLongTermContracts,
+          holidayPricingTemplates: initialHolidayPricingTemplates,
           initialized: true,
         });
       },
@@ -2065,6 +2077,85 @@ export const useAppStore = create<AppState>()(
         if (changed) {
           set({ longTermContracts: updated });
         }
+      },
+
+      addHolidayPricingTemplate: (template) => {
+        if (!get().hasPermission('holidaypricing:create')) return;
+        const now = new Date().toISOString();
+        const newTemplate: HolidayPricingTemplate = {
+          ...template,
+          id: generateId(),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({ holidayPricingTemplates: [...state.holidayPricingTemplates, newTemplate] }));
+        get().addAuditLog('holidaypricing:create', newTemplate.id, newTemplate.name, `创建节假日调价模板「${newTemplate.name}」${PriceAdjustmentTypeLabels[newTemplate.adjustmentType]} ¥${newTemplate.adjustmentValue} ${newTemplate.startDate}~${newTemplate.endDate}`);
+      },
+
+      updateHolidayPricingTemplate: (id, template) => {
+        if (!get().hasPermission('holidaypricing:update')) return;
+        const now = new Date().toISOString();
+        const old = get().holidayPricingTemplates.find((t) => t.id === id);
+        set((state) => ({
+          holidayPricingTemplates: state.holidayPricingTemplates.map((t) =>
+            t.id === id ? { ...t, ...template, updatedAt: now } : t
+          ),
+        }));
+        if (old) {
+          const changes: string[] = [];
+          if (template.name && template.name !== old.name) changes.push(`名称: ${old.name} → ${template.name}`);
+          if (template.adjustmentValue !== undefined && template.adjustmentValue !== old.adjustmentValue) changes.push(`调价值: ${old.adjustmentValue} → ${template.adjustmentValue}`);
+          get().addAuditLog('holidaypricing:update', id, old.name, changes.length > 0 ? changes.join('; ') : `更新节假日调价模板「${old.name}」`);
+        }
+      },
+
+      deleteHolidayPricingTemplate: (id) => {
+        if (!get().hasPermission('holidaypricing:delete')) return;
+        const target = get().holidayPricingTemplates.find((t) => t.id === id);
+        set((state) => ({
+          holidayPricingTemplates: state.holidayPricingTemplates.filter((t) => t.id !== id),
+        }));
+        if (target) {
+          get().addAuditLog('holidaypricing:delete', id, target.name, `删除节假日调价模板「${target.name}」`);
+        }
+      },
+
+      getHolidayPricingTemplates: () => {
+        return get().holidayPricingTemplates;
+      },
+
+      getAdjustedPriceForRoom: (roomId, date) => {
+        const { holidayPricingTemplates, rooms } = get();
+        const room = rooms.find((r) => r.id === roomId);
+        if (!room) return null;
+        const applicableTemplates = holidayPricingTemplates.filter(
+          (t) => t.enabled && t.roomIds.includes(roomId) && isDateInRange(date, t.startDate, t.endDate)
+        );
+        if (applicableTemplates.length === 0) return null;
+        const template = applicableTemplates[applicableTemplates.length - 1];
+        const basePrice = room.price;
+        switch (template.adjustmentType) {
+          case 'fixed':
+            return template.adjustmentValue;
+          case 'percentage':
+            return Math.round(basePrice * (1 + template.adjustmentValue / 100));
+          case 'add':
+            return basePrice + template.adjustmentValue;
+          default:
+            return null;
+        }
+      },
+
+      getRoomAdjustedPrices: (roomId, startDate, endDate) => {
+        const days = getDaysInRange(startDate, endDate);
+        const result: Record<string, number> = {};
+        days.forEach((day) => {
+          const adjusted = get().getAdjustedPriceForRoom(roomId, day);
+          if (adjusted !== null) {
+            result[day] = adjusted;
+          }
+        });
+        return result;
       },
     }),
     {

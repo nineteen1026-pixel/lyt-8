@@ -5,6 +5,7 @@ import Dashboard from '@/pages/Dashboard';
 import RoomList from '@/pages/RoomList';
 import RoomDetail from '@/pages/RoomDetail';
 import Calendar from '@/pages/Calendar';
+import HolidayPricing from '@/pages/HolidayPricing';
 import BookingList from '@/pages/BookingList';
 import WaitlistList from '@/pages/WaitlistList';
 import Reports from '@/pages/Reports';
@@ -65,6 +66,14 @@ export default function App() {
             element={
               <ProtectedRoute permission="booking:view">
                 <Calendar />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/holiday-pricing"
+            element={
+              <ProtectedRoute permission="holidaypricing:view">
+                <HolidayPricing />
               </ProtectedRoute>
             }
           />

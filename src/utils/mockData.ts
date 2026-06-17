@@ -1,4 +1,4 @@
-import type { Room, Booking, Store, ClosedDate, MinStayRule, ExtraService, LongTermContract, PaymentRecord } from '@/types';
+import type { Room, Booking, Store, ClosedDate, MinStayRule, ExtraService, LongTermContract, PaymentRecord, HolidayPricingTemplate } from '@/types';
 import { normalizePhone, PaymentStatus } from '@/types';
 import { generateId, todayStr, calculateNights, calculateMonths, addMonthsStr, getContractPeriodLabel, getMonthDueDate } from './date';
 import { addDays, format, subMonths, subDays, addMonths, parseISO } from 'date-fns';
@@ -878,4 +878,66 @@ export function getInitialLongTermContracts(rooms: Room[]): LongTermContract[] {
   });
 
   return contracts;
+}
+
+export function getInitialHolidayPricingTemplates(rooms: Room[]): HolidayPricingTemplate[] {
+  if (rooms.length === 0) return [];
+  const now = new Date().toISOString();
+  const allRoomIds = rooms.map((r) => r.id);
+  const year = new Date().getFullYear();
+
+  return [
+    {
+      id: generateId(),
+      name: '春节调价',
+      startDate: `${year}-01-28`,
+      endDate: `${year}-02-04`,
+      adjustmentType: 'percentage',
+      adjustmentValue: 50,
+      roomIds: allRoomIds,
+      description: '春节期间统一上浮50%',
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      name: '五一假期调价',
+      startDate: `${year}-05-01`,
+      endDate: `${year}-05-05`,
+      adjustmentType: 'add',
+      adjustmentValue: 100,
+      roomIds: allRoomIds.slice(0, Math.min(3, allRoomIds.length)),
+      description: '五一期间每晚加价100元',
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      name: '国庆黄金周',
+      startDate: `${year}-10-01`,
+      endDate: `${year}-10-07`,
+      adjustmentType: 'percentage',
+      adjustmentValue: 80,
+      roomIds: allRoomIds,
+      description: '国庆期间统一上浮80%',
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      name: '淡季特惠',
+      startDate: `${year}-11-01`,
+      endDate: `${year}-11-30`,
+      adjustmentType: 'percentage',
+      adjustmentValue: -20,
+      roomIds: allRoomIds,
+      description: '淡季促销下调20%',
+      enabled: false,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
 }

@@ -48,7 +48,11 @@ export type Permission =
   | 'longterm:create'
   | 'longterm:update'
   | 'longterm:cancel'
-  | 'longterm:renew';
+  | 'longterm:renew'
+  | 'holidaypricing:view'
+  | 'holidaypricing:create'
+  | 'holidaypricing:update'
+  | 'holidaypricing:delete';
 
 export const RolePermissions: Record<UserRole, Permission[]> = {
   owner: [
@@ -91,6 +95,10 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'longterm:update',
     'longterm:cancel',
     'longterm:renew',
+    'holidaypricing:view',
+    'holidaypricing:create',
+    'holidaypricing:update',
+    'holidaypricing:delete',
   ],
   receptionist: [
     'store:view',
@@ -123,6 +131,10 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'longterm:update',
     'longterm:cancel',
     'longterm:renew',
+    'holidaypricing:view',
+    'holidaypricing:create',
+    'holidaypricing:update',
+    'holidaypricing:delete',
   ],
 };
 
@@ -164,7 +176,10 @@ export type AuditAction =
   | 'longterm:update'
   | 'longterm:cancel'
   | 'longterm:renew'
-  | 'longterm:payment';
+  | 'longterm:payment'
+  | 'holidaypricing:create'
+  | 'holidaypricing:update'
+  | 'holidaypricing:delete';
 
 export const AuditActionLabels: Record<AuditAction, string> = {
   'store:create': '创建门店',
@@ -198,6 +213,9 @@ export const AuditActionLabels: Record<AuditAction, string> = {
   'longterm:cancel': '取消长租合同',
   'longterm:renew': '续签长租合同',
   'longterm:payment': '长租租金支付',
+  'holidaypricing:create': '创建节假日调价模板',
+  'holidaypricing:update': '更新节假日调价模板',
+  'holidaypricing:delete': '删除节假日调价模板',
 };
 
 export interface AuditLog {
@@ -595,6 +613,28 @@ export interface LongTermContract {
   originalContractId?: string;
   notes?: string;
   cancelReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PriceAdjustmentType = 'fixed' | 'percentage' | 'add';
+
+export const PriceAdjustmentTypeLabels: Record<PriceAdjustmentType, string> = {
+  fixed: '设为固定价格',
+  percentage: '按比例调整',
+  add: '加价',
+};
+
+export interface HolidayPricingTemplate {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  adjustmentType: PriceAdjustmentType;
+  adjustmentValue: number;
+  roomIds: string[];
+  description?: string;
+  enabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
