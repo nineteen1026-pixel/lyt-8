@@ -94,7 +94,8 @@ interface AppState {
     checkIn: string,
     checkOut: string,
     excludeBookingId?: string,
-    excludeContractId?: string
+    excludeContractId?: string,
+    excludeWaitlistId?: string
   ) => boolean;
   getAvailableRooms: (checkIn: string, checkOut: string, storeId?: StoreIdFilter) => Room[];
   getMinStayForRoom: (roomId: string, checkIn: string, checkOut: string) => number;
@@ -618,8 +619,8 @@ export const useAppStore = create<AppState>()(
         );
       },
 
-      isRoomAvailable: (roomId, checkIn, checkOut, excludeBookingId, excludeContractId) => {
-        const { bookings, closedDates, longTermContracts } = get();
+      isRoomAvailable: (roomId, checkIn, checkOut, excludeBookingId, excludeContractId, excludeWaitlistId) => {
+        const { bookings, closedDates, longTermContracts, waitlistEntries } = get();
         const room = get().rooms.find((r) => r.id === roomId);
         if (!room || room.status !== 'active') return false;
 
@@ -631,6 +632,15 @@ export const useAppStore = create<AppState>()(
             isDateOverlap(checkIn, checkOut, b.checkIn, b.checkOut)
         );
         if (hasBookingConflict) return false;
+
+        const hasWaitlistConflict = waitlistEntries.some(
+          (w) =>
+            w.id !== excludeWaitlistId &&
+            (w.matchedRoomId === roomId || w.roomId === roomId) &&
+            w.status === 'matched' &&
+            isDateOverlap(checkIn, checkOut, w.checkIn, w.checkOut)
+        );
+        if (hasWaitlistConflict) return false;
 
         const hasLongTermConflict = longTermContracts.some(
           (c) =>

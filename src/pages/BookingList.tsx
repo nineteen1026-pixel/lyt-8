@@ -48,6 +48,7 @@ export default function BookingList() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelledSuccess, setCancelledSuccess] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<Booking | null>(null);
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
 
@@ -133,18 +134,26 @@ export default function BookingList() {
   const handleCancelClick = (booking: Booking) => {
     setCancelTarget(booking);
     setCancelReason('');
+    setCancelledSuccess(false);
   };
 
   const handleCancelConfirm = () => {
     if (cancelTarget) {
       cancelBooking(cancelTarget.id, cancelReason || '客人取消');
+      setCancelledSuccess(true);
     }
-    setCancelTarget(null);
-    setCancelReason('');
   };
 
   const handleRestoreClick = (booking: Booking) => {
     setRestoreTarget(booking);
+    setCancelTarget(null);
+    setCancelledSuccess(false);
+  };
+
+  const handleCancelClose = () => {
+    setCancelTarget(null);
+    setCancelReason('');
+    setCancelledSuccess(false);
   };
 
   const handleRestoreConfirm = () => {
@@ -465,48 +474,122 @@ export default function BookingList() {
 
       <Modal
         open={!!cancelTarget}
-        onClose={() => {
-          setCancelTarget(null);
-          setCancelReason('');
-        }}
-        title="取消预订"
+        onClose={handleCancelClose}
+        title={cancelledSuccess ? '预订已取消' : '取消预订'}
         size="sm"
       >
         <div className="space-y-4">
-          <div className="p-4 bg-red-50 rounded-lg">
-            <div className="text-sm text-red-600">
-              确认要取消 {cancelTarget?.guestName} 的预订吗？
-              <br />
-              房间：{cancelTarget && getRoomNumber(cancelTarget.roomId)}
-              <br />
-              日期：{cancelTarget && formatDateDisplay(cancelTarget.checkIn)} →{' '}
-              {cancelTarget && formatDateDisplay(cancelTarget.checkOut)}
-            </div>
-          </div>
-          <div>
-            <label className="label-base">取消原因</label>
-            <textarea
-              className="input-base resize-none"
-              rows={3}
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="请输入取消原因..."
-            />
-          </div>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => {
-                setCancelTarget(null);
-                setCancelReason('');
-              }}
-              className="btn-secondary"
-            >
-              返回
-            </button>
-            <button onClick={handleCancelConfirm} className="btn-danger">
-              确认取消
-            </button>
-          </div>
+          {!cancelledSuccess ? (
+            <>
+              <div className="p-4 bg-red-50 rounded-lg">
+                <div className="text-sm text-red-600">
+                  确认要取消 {cancelTarget?.guestName} 的预订吗？
+                  <br />
+                  房间：{cancelTarget && getRoomNumber(cancelTarget.roomId)}
+                  <br />
+                  日期：{cancelTarget && formatDateDisplay(cancelTarget.checkIn)} →{' '}
+                  {cancelTarget && formatDateDisplay(cancelTarget.checkOut)}
+                </div>
+              </div>
+              <div>
+                <label className="label-base">取消原因</label>
+                <textarea
+                  className="input-base resize-none"
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="请输入取消原因..."
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={handleCancelClose}
+                  className="btn-secondary"
+                >
+                  返回
+                </button>
+                <button onClick={handleCancelConfirm} className="btn-danger">
+                  确认取消
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="p-4 bg-green-50 rounded-lg">
+                <div className="text-sm text-green-700">
+                  ✓ 预订已成功取消
+                  <br />
+                  客人：{cancelTarget?.guestName}
+                  <br />
+                  房间：{cancelTarget && getRoomNumber(cancelTarget.roomId)}
+                  <br />
+                  日期：{cancelTarget && formatDateDisplay(cancelTarget.checkIn)} →{' '}
+                  {cancelTarget && formatDateDisplay(cancelTarget.checkOut)}
+                </div>
+              </div>
+              {cancelTarget && canRestoreBooking && (
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="text-sm text-blue-700 mb-3">
+                    需要恢复预订吗？
+                  </div>
+                  {(() => {
+                    const available = isRoomAvailable(
+                      cancelTarget.roomId,
+                      cancelTarget.checkIn,
+                      cancelTarget.checkOut,
+                      cancelTarget.id
+                    );
+                    return (
+                      <div
+                        className={`p-3 rounded-lg text-sm mb-3 ${
+                          available ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                        }`}
+                      >
+                        {available
+                          ? '✓ 目标日期房间可用，可以恢复预订'
+                          : '✗ 目标日期房间已被占用或不可用，无法恢复预订'}
+                      </div>
+                    );
+                  })()}
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={handleCancelClose}
+                      className="btn-secondary"
+                    >
+                      关闭
+                    </button>
+                    <button
+                      onClick={() => cancelTarget && handleRestoreClick(cancelTarget)}
+                      className="btn-primary !bg-green-600 !hover:bg-green-700"
+                      disabled={
+                        cancelTarget
+                          ? !isRoomAvailable(
+                              cancelTarget.roomId,
+                              cancelTarget.checkIn,
+                              cancelTarget.checkOut,
+                              cancelTarget.id
+                            )
+                          : true
+                      }
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      立即恢复
+                    </button>
+                  </div>
+                </div>
+              )}
+              {(!canRestoreBooking) && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleCancelClose}
+                    className="btn-secondary"
+                  >
+                    关闭
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Modal>
 
