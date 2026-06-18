@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup, RotateCcw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup, RotateCcw, StickyNote } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Booking, BookingStatus, GuestProfile, RoomType, ExtraService } from '@/types';
 import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone, ExtraServiceChargeTypeLabels } from '@/types';
@@ -9,6 +9,27 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import BookingForm from './BookingForm';
 import Modal from '@/components/Modal';
 import { formatDateDisplay, calculateNights, isSameDayStr } from '@/utils/date';
+import { highlightText, containsKeyword } from '@/lib/utils';
+
+function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
+  const parts = highlightText(text, keyword);
+  return (
+    <>
+      {parts.map((part, i) =>
+        typeof part === 'string' ? (
+          <span key={i}>{part}</span>
+        ) : (
+          <mark
+            key={i}
+            className="bg-yellow-200 text-brand-brown rounded px-0.5 font-medium"
+          >
+            {part.highlighted}
+          </mark>
+        )
+      )}
+    </>
+  );
+}
 
 export default function BookingList() {
   const navigate = useNavigate();
@@ -92,15 +113,16 @@ export default function BookingList() {
       }
       if (roomIdFilter !== 'all' && b.roomId !== roomIdFilter) return false;
       if (search) {
-        const lower = search.toLowerCase();
+        const trimmedSearch = search.trim();
         const normalizedSearch = normalizePhone(search);
         const room = getRoomById(b.roomId);
         return (
-          b.guestName.toLowerCase().includes(lower) ||
-          b.guestPhone.includes(search) ||
+          containsKeyword(b.guestName, trimmedSearch) ||
+          b.guestPhone.includes(trimmedSearch) ||
           (normalizedSearch && b.guestPhone.includes(normalizedSearch)) ||
-          (room?.roomNumber.includes(search) ?? false) ||
-          (room?.name.toLowerCase().includes(lower) ?? false)
+          (room?.roomNumber.includes(trimmedSearch) ?? false) ||
+          containsKeyword(room?.name, trimmedSearch) ||
+          containsKeyword(b.notes, trimmedSearch)
         );
       }
       return true;
@@ -203,7 +225,7 @@ export default function BookingList() {
             <input
               type="text"
               className="input-base pl-10"
-              placeholder="搜索客人姓名、电话、房间号..."
+              placeholder="搜索客人姓名、电话、房间号、备注关键词..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -332,12 +354,20 @@ export default function BookingList() {
                         >
                           <div className="font-medium text-brand-brown flex items-center gap-2">
                             <User className="w-4 h-4 text-brand-taupe" />
-                            {b.guestName}
+                            <HighlightedText text={b.guestName} keyword={search} />
                           </div>
                           <div className="text-sm text-brand-taupe flex items-center gap-2 mt-1">
                             <Phone className="w-3.5 h-3.5" />
-                            {b.guestPhone}
+                            <HighlightedText text={b.guestPhone} keyword={search} />
                           </div>
+                          {b.notes && (
+                            <div className="text-xs text-brand-taupe/80 flex items-center gap-1.5 mt-1.5 max-w-[240px]">
+                              <StickyNote className="w-3 h-3 flex-shrink-0 text-brand-orange/60" />
+                              <span className="truncate">
+                                <HighlightedText text={b.notes} keyword={search} />
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-5 py-4">
@@ -379,7 +409,7 @@ export default function BookingList() {
                           </div>
                         )}
                         <div className="font-medium text-brand-brown">
-                          {room?.roomNumber} {room?.name}
+                          <HighlightedText text={`${room?.roomNumber ?? ''} ${room?.name ?? ''}`} keyword={search} />
                         </div>
                         <div className="text-xs text-brand-taupe">{b.guests}人入住</div>
                       </td>
@@ -670,14 +700,14 @@ export default function BookingList() {
                 <div className="text-xs text-brand-taupe mb-1">客人姓名</div>
                 <div className="font-medium text-brand-brown flex items-center gap-2">
                   <User className="w-4 h-4 text-brand-taupe" />
-                  {detailBooking.guestName}
+                  <HighlightedText text={detailBooking.guestName} keyword={search} />
                 </div>
               </div>
               <div>
                 <div className="text-xs text-brand-taupe mb-1">联系电话</div>
                 <div className="font-medium text-brand-brown flex items-center gap-2">
                   <Phone className="w-4 h-4 text-brand-taupe" />
-                  {detailBooking.guestPhone}
+                  <HighlightedText text={detailBooking.guestPhone} keyword={search} />
                   <button
                     onClick={() => {
                       setDetailBooking(null);
@@ -693,7 +723,7 @@ export default function BookingList() {
               <div>
                 <div className="text-xs text-brand-taupe mb-1">房间</div>
                 <div className="font-medium text-brand-brown">
-                  {getRoomNumber(detailBooking.roomId)}
+                  <HighlightedText text={getRoomNumber(detailBooking.roomId)} keyword={search} />
                 </div>
               </div>
               <div>
@@ -777,11 +807,12 @@ export default function BookingList() {
                       unitLabel = `× ${nights}晚 × ${item.quantity}份`;
                       subtotal = service.price * nights * item.quantity;
                       break;
-                    case 'per_person_per_night':
+                    case 'per_person_per_night': {
                       const people = Math.min(item.quantity, detailBooking.guests);
                       unitLabel = `× ${people}人 × ${nights}晚`;
                       subtotal = service.price * people * nights;
                       break;
+                    }
                     case 'per_stay':
                     default:
                       unitLabel = `× ${item.quantity}次`;
@@ -808,15 +839,17 @@ export default function BookingList() {
             {detailBooking.guestIdCard && (
               <div>
                 <div className="text-xs text-brand-taupe mb-1">身份证号</div>
-                <div className="font-medium text-brand-brown">{detailBooking.guestIdCard}</div>
+                <div className="font-medium text-brand-brown">
+                  <HighlightedText text={detailBooking.guestIdCard} keyword={search} />
+                </div>
               </div>
             )}
 
             {detailBooking.notes && (
               <div>
                 <div className="text-xs text-brand-taupe mb-1">备注</div>
-                <div className="p-3 bg-brand-beige/60 rounded-lg text-sm text-brand-brown">
-                  {detailBooking.notes}
+                <div className="p-3 bg-brand-beige/60 rounded-lg text-sm text-brand-brown whitespace-pre-wrap">
+                  <HighlightedText text={detailBooking.notes} keyword={search} />
                 </div>
               </div>
             )}
