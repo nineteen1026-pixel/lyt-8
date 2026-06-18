@@ -17,13 +17,11 @@ import {
   Building2,
   Filter,
   FileSignature,
-  Clock,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import Badge from '@/components/Badge';
 import TodayTodoCenter from '@/components/TodayTodoCenter';
-import { BookingStatusColors, BookingStatusLabels, LongTermContractStatusColors, LongTermContractStatusLabels } from '@/types';
-import { todayStr, isSameDayStr, formatDateDisplay } from '@/utils/date';
+import { LongTermContractStatusColors, LongTermContractStatusLabels } from '@/types';
+import { todayStr, formatDateDisplay } from '@/utils/date';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -31,14 +29,8 @@ export default function Dashboard() {
     stores,
     getTodayStats,
     getRevenueStats,
-    getBookingsByStore,
     getRoomsByStore,
     getPendingTasks,
-    getCleaningTasksByStore,
-    getRoomById,
-    getExpiringContracts,
-    getOverduePayments,
-    getContractExpiryInfo,
     longTermContracts,
     hasPermission,
   } = useAppStore();
@@ -48,38 +40,14 @@ export default function Dashboard() {
   const stats = getTodayStats(storeFilter);
   const revenueStats = getRevenueStats(storeFilter);
   const pendingTasks = getPendingTasks(storeFilter);
-  const bookings = getBookingsByStore(storeFilter);
-  const rooms = getRoomsByStore(storeFilter);
-  const cleaningTasks = getCleaningTasksByStore(storeFilter);
   const today = todayStr();
 
-  const expiringContracts = useMemo(() => getExpiringContracts(30, storeFilter), [getExpiringContracts, storeFilter]);
-  const overduePayments = useMemo(() => getOverduePayments(storeFilter), [getOverduePayments, storeFilter]);
   const activeLongTermCount = useMemo(
     () => longTermContracts.filter((c) => c.status === 'active' || c.status === 'expiring').length,
     [longTermContracts]
   );
 
   const canViewLongTerm = hasPermission('longterm:view');
-
-  const todayCheckIns = useMemo(
-    () => bookings.filter(
-      (b) => b.status !== 'cancelled' && isSameDayStr(b.checkIn, today)
-    ),
-    [bookings, today]
-  );
-
-  const todayCheckOuts = useMemo(
-    () => bookings.filter(
-      (b) => b.status !== 'cancelled' && isSameDayStr(b.checkOut, today)
-    ),
-    [bookings, today]
-  );
-
-  const getRoomNumber = (roomId: string) => {
-    const room = rooms.find((r) => r.id === roomId);
-    return room ? `${room.roomNumber} ${room.name}` : '未知房间';
-  };
 
   const statCards = [
     {
@@ -413,246 +381,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="card-base p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-lg font-semibold text-brand-brown">
-              今日入住 ({todayCheckIns.length})
-            </h2>
-            <button
-              onClick={() => navigate('/bookings')}
-              className="text-sm text-brand-brown hover:text-brand-brownLight flex items-center gap-1"
-            >
-              查看全部 <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-          {todayCheckIns.length === 0 ? (
-            <div className="text-center py-8 text-brand-taupe text-sm">
-              今日暂无入住
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {todayCheckIns.map((b) => (
-                <div
-                  key={b.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-brand-beige/50 hover:bg-brand-beige transition-colors"
-                >
-                  <div>
-                    <div className="font-medium text-brand-brown">{b.guestName}</div>
-                    <div className="text-xs text-brand-taupe">{getRoomNumber(b.roomId)}</div>
-                  </div>
-                  <Badge
-                    variant={
-                      b.status === 'checked-in'
-                        ? 'green'
-                        : b.status === 'confirmed'
-                        ? 'info'
-                        : 'default'
-                    }
-                  >
-                    {BookingStatusLabels[b.status]}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="card-base p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-lg font-semibold text-brand-brown">
-              今日退房 ({todayCheckOuts.length})
-            </h2>
-            <button
-              onClick={() => navigate('/bookings')}
-              className="text-sm text-brand-brown hover:text-brand-brownLight flex items-center gap-1"
-            >
-              查看全部 <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-          {todayCheckOuts.length === 0 ? (
-            <div className="text-center py-8 text-brand-taupe text-sm">
-              今日暂无退房
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {todayCheckOuts.map((b) => (
-                <div
-                  key={b.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-brand-beige/50 hover:bg-brand-beige transition-colors"
-                >
-                  <div>
-                    <div className="font-medium text-brand-brown">{b.guestName}</div>
-                    <div className="text-xs text-brand-taupe">{getRoomNumber(b.roomId)}</div>
-                  </div>
-                  <span className={`text-xs px-2.5 py-0.5 rounded-full ${BookingStatusColors[b.status]}`}>
-                    {BookingStatusLabels[b.status]}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="card-base p-6 mt-5">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display text-lg font-semibold text-brand-brown flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-rose-500" />
-            待处理任务汇总
-          </h2>
-          <button
-            onClick={() => navigate('/cleaning-tasks')}
-            className="text-sm text-brand-brown hover:text-brand-brownLight flex items-center gap-1"
-          >
-            查看全部 <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-amber-600" />
-              <span className="text-sm text-amber-700 font-medium">待保洁</span>
-            </div>
-            <div className="font-display text-3xl font-bold text-amber-600">
-              {pendingTasks.pendingCleaning}
-            </div>
-          </div>
-          <div className="p-4 rounded-xl bg-brand-green/10 border border-brand-green/30">
-            <div className="flex items-center gap-2 mb-2">
-              <CalendarCheck className="w-4 h-4 text-brand-green" />
-              <span className="text-sm text-brand-green font-medium">今日入住</span>
-            </div>
-            <div className="font-display text-3xl font-bold text-brand-green">
-              {pendingTasks.todayCheckIns}
-            </div>
-          </div>
-          <div className="p-4 rounded-xl bg-brand-orange/10 border border-brand-orange/30">
-            <div className="flex items-center gap-2 mb-2">
-              <CalendarX className="w-4 h-4 text-brand-orange" />
-              <span className="text-sm text-brand-orange font-medium">今日退房</span>
-            </div>
-            <div className="font-display text-3xl font-bold text-brand-orange">
-              {pendingTasks.todayCheckOuts}
-            </div>
-          </div>
-          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Wrench className="w-4 h-4 text-rose-600" />
-              <span className="text-sm text-rose-600 font-medium">维护中房间</span>
-            </div>
-            <div className="font-display text-3xl font-bold text-rose-600">
-              {pendingTasks.maintenanceRooms}
-            </div>
-          </div>
-        </div>
-
-        {canViewLongTerm && (expiringContracts.length > 0 || overduePayments.length > 0) && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-brand-brown flex items-center gap-2">
-                <FileSignature className="w-4 h-4 text-indigo-500" />
-                长租到期与逾期预警
-              </h3>
-              <button
-                onClick={() => navigate('/long-term')}
-                className="text-xs text-brand-brown hover:text-brand-brownLight flex items-center gap-1"
-              >
-                查看详情 <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {expiringContracts.length > 0 && (
-                <div
-                  className="p-4 rounded-xl bg-amber-50 border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors"
-                  onClick={() => navigate('/long-term')}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="w-4 h-4 text-amber-600" />
-                    <span className="text-sm text-amber-700 font-medium">即将到期合同</span>
-                  </div>
-                  <div className="font-display text-3xl font-bold text-amber-600">
-                    {expiringContracts.length}
-                  </div>
-                  <div className="text-xs text-amber-600 mt-1">
-                    含 {expiringContracts.filter((c) => getContractExpiryInfo(c.id)?.alertLevel === 'urgent').length} 份紧急
-                  </div>
-                </div>
-              )}
-              {overduePayments.length > 0 && (
-                <div
-                  className="p-4 rounded-xl bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
-                  onClick={() => navigate('/long-term')}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4 text-red-600" />
-                    <span className="text-sm text-red-700 font-medium">逾期待收租金</span>
-                  </div>
-                  <div className="font-display text-3xl font-bold text-red-600">
-                    {overduePayments.length}
-                  </div>
-                  <div className="text-xs text-red-600 mt-1">
-                    ¥{overduePayments.reduce((s, p) => s + p.amount - p.paidAmount, 0).toLocaleString()} 待收
-                  </div>
-                </div>
-              )}
-              <div
-                className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
-                onClick={() => navigate('/long-term')}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <FileSignature className="w-4 h-4 text-indigo-600" />
-                  <span className="text-sm text-indigo-700 font-medium">履行中长租</span>
-                </div>
-                <div className="font-display text-3xl font-bold text-indigo-600">
-                  {activeLongTermCount}
-                </div>
-                <div className="text-xs text-indigo-600 mt-1">
-                  长租合同管理
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {cleaningTasks.filter((t) => t.status !== 'completed').length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium text-brand-brown mb-3">待处理保洁任务</h3>
-            <div className="space-y-2">
-              {cleaningTasks
-                .filter((t) => t.status !== 'completed')
-                .slice(0, 5)
-                .map((task) => {
-                  const room = getRoomById(task.roomId);
-                  return (
-                    <div
-                      key={task.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-amber-50 border border-amber-200"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Sparkles className="w-4 h-4 text-amber-600" />
-                        <div>
-                          <div className="font-medium text-brand-brown">
-                            {room ? `${room.roomNumber} ${room.name}` : '未知房间'}
-                          </div>
-                          <div className="text-xs text-brand-taupe">
-                            {task.guestName ? `${task.guestName} 退房后保洁` : '定期保洁'}
-                            {task.notes ? ` · ${task.notes}` : ''}
-                          </div>
-                        </div>
-                      </div>
-                      <Badge variant={task.status === 'pending' ? 'warning' : 'info'}>
-                        {task.status === 'pending' ? '待处理' : '进行中'}
-                      </Badge>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1451,8 +1451,7 @@ export const useAppStore = create<AppState>()(
 
         const todayCheckIns = bookings.filter(
           (b) =>
-            b.status !== 'cancelled' &&
-            b.status !== 'checked-out' &&
+            b.status === 'confirmed' &&
             isSameDayStr(b.checkIn, today)
         );
         todayCheckIns.forEach((b) => {
@@ -1461,20 +1460,19 @@ export const useAppStore = create<AppState>()(
             id: `checkin-${b.id}`,
             category: 'checkIn',
             title: `${b.guestName} 办理入住`,
-            subtitle: b.status === 'checked-in' ? '已入住' : '待入住',
+            subtitle: '待入住',
             roomInfo: room ? `${room.roomNumber} ${room.name}` : '未知房间',
             timeInfo: `入住日期: ${b.checkIn}`,
             targetId: b.id,
             targetType: 'booking',
             navigatePath: '/bookings',
-            priority: b.status === 'checked-in' ? 'low' : 'normal',
+            priority: 'normal',
           });
         });
 
         const todayCheckOuts = bookings.filter(
           (b) =>
-            b.status !== 'cancelled' &&
-            b.status !== 'checked-out' &&
+            b.status === 'checked-in' &&
             isSameDayStr(b.checkOut, today)
         );
         todayCheckOuts.forEach((b) => {
@@ -1483,7 +1481,7 @@ export const useAppStore = create<AppState>()(
             id: `checkout-${b.id}`,
             category: 'checkOut',
             title: `${b.guestName} 办理退房`,
-            subtitle: b.status === 'checked-in' ? '当前在住' : '待退房',
+            subtitle: '当前在住',
             roomInfo: room ? `${room.roomNumber} ${room.name}` : '未知房间',
             timeInfo: `退房日期: ${b.checkOut}`,
             targetId: b.id,
@@ -1494,7 +1492,7 @@ export const useAppStore = create<AppState>()(
         });
 
         const pendingCleaning = cleaningTasks.filter(
-          (t) => t.status !== 'completed' && isSameDayStr(t.scheduledDate, today)
+          (t) => t.status === 'pending' || t.status === 'in-progress'
         );
         pendingCleaning.forEach((t) => {
           const room = getRoomById(t.roomId);
@@ -1531,17 +1529,21 @@ export const useAppStore = create<AppState>()(
         expiringContracts.forEach((c) => {
           const room = getRoomById(c.roomId);
           const expiryInfo = getContractExpiryInfo(c.id);
+          const daysRemaining = expiryInfo?.daysRemaining ?? 999;
+          const isUrgent = expiryInfo?.alertLevel === 'urgent';
+          const isToday = isSameDayStr(c.endDate, today);
+          if (!isUrgent && !isToday) return;
           todos.push({
             id: `renewal-${c.id}`,
             category: 'renewal',
-            title: `${c.guestName} 合同即将到期`,
-            subtitle: expiryInfo?.message || '建议提前联系续住',
+            title: `${c.guestName} 合同${isToday ? '今日' : '即将'}到期`,
+            subtitle: expiryInfo?.message || '建议联系续住',
             roomInfo: room ? `${room.roomNumber} ${room.name}` : '未知房间',
             timeInfo: `到期日期: ${c.endDate}`,
             targetId: c.id,
             targetType: 'contract',
             navigatePath: '/long-term',
-            priority: expiryInfo?.alertLevel === 'urgent' ? 'urgent' : 'normal',
+            priority: isUrgent || isToday ? 'urgent' : 'normal',
           });
         });
 

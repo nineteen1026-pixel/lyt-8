@@ -43,7 +43,7 @@ interface Props {
 
 export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
   const navigate = useNavigate();
-  const { stores, hasPermission } = useAppStore();
+  const { stores } = useAppStore();
   const getTodayTodos = useAppStore((s) => s.getTodayTodos);
   const getTodoSummary = useAppStore((s) => s.getTodoSummary);
   const updateCleaningTaskStatus = useAppStore((s) => s.updateCleaningTaskStatus);
@@ -51,7 +51,6 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
 
   const [expanded, setExpanded] = useState(true);
   const [activeCategory, setActiveCategory] = useState<TodoCategory | 'all'>('all');
-  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
 
   const todos = useMemo(() => getTodayTodos(storeFilter), [getTodayTodos, storeFilter]);
   const summary = useMemo(() => getTodoSummary(storeFilter), [getTodoSummary, storeFilter]);
@@ -75,14 +74,6 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
 
   const handleQuickComplete = (e: React.MouseEvent, todo: TodoItem) => {
     e.stopPropagation();
-    if (completedIds.has(todo.id)) {
-      setCompletedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(todo.id);
-        return next;
-      });
-      return;
-    }
     if (todo.targetType === 'cleaning') {
       updateCleaningTaskStatus(todo.targetId, 'completed');
     } else if (todo.targetType === 'booking' && todo.category === 'checkIn') {
@@ -90,7 +81,6 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
     } else if (todo.targetType === 'booking' && todo.category === 'checkOut') {
       updateBookingStatus(todo.targetId, 'checked-out');
     }
-    setCompletedIds((prev) => new Set(prev).add(todo.id));
   };
 
   const renderPriorityDot = (priority: TodoItem['priority']) => {
@@ -210,54 +200,37 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
             ) : (
               visibleTodos.map((todo) => {
                 const Icon = CategoryIcon[todo.category];
-                const isCompleted = completedIds.has(todo.id);
                 const canQuickComplete =
                   todo.targetType === 'cleaning' ||
                   (todo.targetType === 'booking' && (todo.category === 'checkIn' || todo.category === 'checkOut'));
+                const categoryColorClass = TodoCategoryColors[todo.category];
+                const textColorMatch = categoryColorClass.match(/text-[^\s]+/)?.[0] || 'text-brand-brown';
 
                 return (
                   <div
                     key={todo.id}
                     onClick={() => handleTodoClick(todo)}
-                    className={`group relative p-4 rounded-xl border cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-soft ${
-                      isCompleted
-                        ? 'bg-green-50/50 border-green-200 opacity-70'
-                        : TodoCategoryColors[todo.category]
-                    }`}
+                    className={`group relative p-4 rounded-xl border cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-soft ${categoryColorClass}`}
                   >
                     <div className="flex items-start gap-3">
-                      <div
-                        className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
-                          isCompleted
-                            ? 'bg-green-500 text-white'
-                            : 'bg-white/80 shadow-sm'
-                        }`}
-                      >
-                        {isCompleted ? (
-                          <CheckCircle2 className="w-5 h-5" />
-                        ) : (
-                          <Icon className={`w-5 h-5 ${TodoCategoryColors[todo.category].match(/text-[^\s]+/)?.[0] || 'text-brand-brown'}`} />
-                        )}
+                      <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center bg-white/80 shadow-sm">
+                        <Icon className={`w-5 h-5 ${textColorMatch}`} />
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <div className="flex items-center gap-2">
                             {renderPriorityDot(todo.priority)}
-                            <h4 className={`font-semibold text-sm ${isCompleted ? 'line-through text-green-700' : ''}`}>
+                            <h4 className="font-semibold text-sm">
                               {todo.title}
                             </h4>
                           </div>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${
-                            isCompleted
-                              ? 'bg-green-200 text-green-700'
-                              : TodoCategoryBadgeColors[todo.category]
-                          }`}>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${TodoCategoryBadgeColors[todo.category]}`}>
                             {TodoCategoryLabels[todo.category]}
                           </span>
                         </div>
 
-                        <p className={`text-xs mb-2 ${isCompleted ? 'text-green-600' : 'text-brand-taupe'}`}>
+                        <p className="text-xs mb-2 text-brand-taupe">
                           {todo.subtitle}
                         </p>
 
@@ -287,18 +260,10 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
                         {canQuickComplete && (
                           <button
                             onClick={(e) => handleQuickComplete(e, todo)}
-                            className={`p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${
-                              isCompleted
-                                ? 'bg-green-100 text-green-600'
-                                : 'bg-white/80 text-brand-taupe hover:bg-white hover:text-brand-green'
-                            }`}
-                            title={isCompleted ? '撤销完成' : '标记完成'}
+                            className="p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 bg-white/80 text-brand-taupe hover:bg-white hover:text-brand-green"
+                            title="标记完成"
                           >
-                            {isCompleted ? (
-                              <CheckCircle2 className="w-4 h-4" />
-                            ) : (
-                              <Circle className="w-4 h-4" />
-                            )}
+                            <Circle className="w-4 h-4" />
                           </button>
                         )}
                         <ArrowRight className="w-4 h-4 text-brand-taupe/50 group-hover:text-brand-brown transition-colors" />
