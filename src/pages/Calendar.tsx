@@ -26,6 +26,8 @@ export default function CalendarView() {
     getActiveLongTermContractsByDate,
     getContractExpiryInfo,
     longTermContracts,
+    getBookingsByRoom,
+    getLongTermContractsByRoom,
   } = useAppStore();
   const [storeFilter, setStoreFilter] = useState<string>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -35,6 +37,9 @@ export default function CalendarView() {
   const [prefillCheckIn, setPrefillCheckIn] = useState<string | undefined>();
   const [checkOutModalOpen, setCheckOutModalOpen] = useState(false);
   const [checkOutBooking, setCheckOutBooking] = useState<Booking | null>(null);
+
+  const roomIdFilter = searchParams.get('roomId');
+  const filterRoom = roomIdFilter ? getRoomById(roomIdFilter) : null;
 
   useEffect(() => {
     const dateParam = searchParams.get('date');
@@ -49,7 +54,14 @@ export default function CalendarView() {
         // ignore invalid date
       }
     }
-  }, [searchParams]);
+    const roomIdParam = searchParams.get('roomId');
+    if (roomIdParam) {
+      const room = getRoomById(roomIdParam);
+      if (room) {
+        setStoreFilter(room.storeId);
+      }
+    }
+  }, [searchParams, getRoomById]);
 
   const handleDateClick = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -75,8 +87,21 @@ export default function CalendarView() {
     setCheckOutBooking(null);
   };
 
-  const activeRooms = useMemo(() => getRoomsByStore(storeFilter).filter((r) => r.status === 'active'), [storeFilter, getRoomsByStore]);
-  const maintenanceRooms = useMemo(() => getRoomsByStore(storeFilter).filter((r) => r.status === 'maintenance'), [storeFilter, getRoomsByStore]);
+  const activeRooms = useMemo(() => {
+    let rooms = getRoomsByStore(storeFilter).filter((r) => r.status === 'active');
+    if (roomIdFilter) {
+      rooms = rooms.filter((r) => r.id === roomIdFilter);
+    }
+    return rooms;
+  }, [storeFilter, getRoomsByStore, roomIdFilter]);
+
+  const maintenanceRooms = useMemo(() => {
+    let rooms = getRoomsByStore(storeFilter).filter((r) => r.status === 'maintenance');
+    if (roomIdFilter) {
+      rooms = rooms.filter((r) => r.id === roomIdFilter);
+    }
+    return rooms;
+  }, [storeFilter, getRoomsByStore, roomIdFilter]);
   const year = getYear(currentDate);
   const month = getMonth(currentDate);
   const weeks = useMemo(() => getMonthMatrix(year, month), [year, month]);
@@ -84,17 +109,29 @@ export default function CalendarView() {
 
   const getDayBookings = (date: Date): Booking[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return getActiveBookingsByDate(dateStr, storeFilter);
+    let bookings = getActiveBookingsByDate(dateStr, storeFilter);
+    if (roomIdFilter) {
+      bookings = bookings.filter((b) => b.roomId === roomIdFilter);
+    }
+    return bookings;
   };
 
   const getDayClosedDates = (date: Date): ClosedDate[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return getClosedDatesByDate(dateStr, storeFilter);
+    let closedDates = getClosedDatesByDate(dateStr, storeFilter);
+    if (roomIdFilter) {
+      closedDates = closedDates.filter((cd) => cd.roomId === roomIdFilter);
+    }
+    return closedDates;
   };
 
   const getDayLongTermContracts = (date: Date): LongTermContract[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return getActiveLongTermContractsByDate(dateStr, storeFilter);
+    let contracts = getActiveLongTermContractsByDate(dateStr, storeFilter);
+    if (roomIdFilter) {
+      contracts = contracts.filter((c) => c.roomId === roomIdFilter);
+    }
+    return contracts;
   };
 
   const getDayStatus = (date: Date) => {
@@ -174,9 +211,32 @@ export default function CalendarView() {
     return addBooking(data);
   };
 
-  const selectedDateBookings = selectedDate ? getActiveBookingsByDate(selectedDate, storeFilter) : [];
-  const selectedDateClosedDates = selectedDate ? getClosedDatesByDate(selectedDate, storeFilter) : [];
-  const selectedDateLongTerm = selectedDate ? getActiveLongTermContractsByDate(selectedDate, storeFilter) : [];
+  const selectedDateBookings = useMemo(() => {
+    if (!selectedDate) return [];
+    let bookings = getActiveBookingsByDate(selectedDate, storeFilter);
+    if (roomIdFilter) {
+      bookings = bookings.filter((b) => b.roomId === roomIdFilter);
+    }
+    return bookings;
+  }, [selectedDate, storeFilter, roomIdFilter, getActiveBookingsByDate]);
+
+  const selectedDateClosedDates = useMemo(() => {
+    if (!selectedDate) return [];
+    let closedDates = getClosedDatesByDate(selectedDate, storeFilter);
+    if (roomIdFilter) {
+      closedDates = closedDates.filter((cd) => cd.roomId === roomIdFilter);
+    }
+    return closedDates;
+  }, [selectedDate, storeFilter, roomIdFilter, getClosedDatesByDate]);
+
+  const selectedDateLongTerm = useMemo(() => {
+    if (!selectedDate) return [];
+    let contracts = getActiveLongTermContractsByDate(selectedDate, storeFilter);
+    if (roomIdFilter) {
+      contracts = contracts.filter((c) => c.roomId === roomIdFilter);
+    }
+    return contracts;
+  }, [selectedDate, storeFilter, roomIdFilter, getActiveLongTermContractsByDate]);
 
   return (
     <div className="animate-fade-in">
@@ -205,6 +265,7 @@ export default function CalendarView() {
             className="input-base !w-auto"
             value={storeFilter}
             onChange={(e) => setStoreFilter(e.target.value)}
+            disabled={!!roomIdFilter}
           >
             <option value="all">全部门店</option>
             {stores.map((s) => (
@@ -213,7 +274,24 @@ export default function CalendarView() {
               </option>
             ))}
           </select>
-          {storeFilter !== 'all' && (
+          {filterRoom && (
+            <span className="text-sm text-brand-orange flex items-center gap-1 px-3 py-1.5 bg-brand-orange/10 rounded-lg">
+              <BedDouble className="w-4 h-4" />
+              当前查看：{filterRoom.roomNumber} {filterRoom.name}
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams(searchParams);
+                  params.delete('roomId');
+                  setSearchParams(params);
+                }}
+                className="ml-2 hover:text-brand-brown transition-colors"
+                title="清除房间筛选"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {storeFilter !== 'all' && !filterRoom && (
             <span className="text-sm text-brand-taupe flex items-center gap-1">
               <Building2 className="w-4 h-4" />
               当前查看单门店
