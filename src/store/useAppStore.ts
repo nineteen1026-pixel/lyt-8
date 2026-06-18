@@ -296,15 +296,44 @@ export const useAppStore = create<AppState>()(
           if (hasMissingStatusHistory) {
             const migratedBookings = bookings.map((b) => {
               if (b.statusHistory && b.statusHistory.length > 0) return b;
-              const initialEntry: import('@/types').StatusTimelineEntry = {
-                status: b.status,
+              const T = import('@/types').StatusTimelineEntry;
+              const entries: T[] = [{
+                status: 'confirmed' as const,
                 timestamp: b.createdAt,
                 operatorName: '系统初始化',
-                remark: b.status === 'checked-out' ? '已完成入住' : b.status === 'checked-in' ? '已办理入住' : b.status === 'cancelled' ? '预订已取消' : '预订已确认',
-              };
+                remark: '创建预订',
+              }];
+              if (b.status === 'checked-in') {
+                entries.push({
+                  status: 'checked-in' as const,
+                  timestamp: new Date(b.checkIn).toISOString(),
+                  operatorName: '系统初始化',
+                  remark: '办理入住',
+                });
+              } else if (b.status === 'checked-out') {
+                entries.push({
+                  status: 'checked-in' as const,
+                  timestamp: new Date(b.checkIn).toISOString(),
+                  operatorName: '系统初始化',
+                  remark: '办理入住',
+                });
+                entries.push({
+                  status: 'checked-out' as const,
+                  timestamp: new Date(b.checkOut).toISOString(),
+                  operatorName: '系统初始化',
+                  remark: '办理退房',
+                });
+              } else if (b.status === 'cancelled') {
+                entries.push({
+                  status: 'cancelled' as const,
+                  timestamp: b.updatedAt,
+                  operatorName: '系统初始化',
+                  remark: '取消预订',
+                });
+              }
               return {
                 ...b,
-                statusHistory: [initialEntry],
+                statusHistory: entries,
               };
             });
             set({ bookings: migratedBookings });
@@ -319,15 +348,44 @@ export const useAppStore = create<AppState>()(
         const initialRooms = getInitialRooms(initialStores);
         const initialBookingsRaw = getInitialBookings(initialRooms);
         const initialBookings = initialBookingsRaw.map((b) => {
-          const initialEntry: import('@/types').StatusTimelineEntry = {
-            status: b.status,
+          const T = import('@/types').StatusTimelineEntry;
+          const entries: T[] = [{
+            status: 'confirmed' as const,
             timestamp: b.createdAt,
             operatorName: '系统初始化',
-            remark: b.status === 'checked-out' ? '已完成入住' : b.status === 'checked-in' ? '已办理入住' : b.status === 'cancelled' ? '预订已取消' : '预订已确认',
-          };
+            remark: '创建预订',
+          }];
+          if (b.status === 'checked-in') {
+            entries.push({
+              status: 'checked-in' as const,
+              timestamp: new Date(b.checkIn).toISOString(),
+              operatorName: '系统初始化',
+              remark: '办理入住',
+            });
+          } else if (b.status === 'checked-out') {
+            entries.push({
+              status: 'checked-in' as const,
+              timestamp: new Date(b.checkIn).toISOString(),
+              operatorName: '系统初始化',
+              remark: '办理入住',
+            });
+            entries.push({
+              status: 'checked-out' as const,
+              timestamp: new Date(b.checkOut).toISOString(),
+              operatorName: '系统初始化',
+              remark: '办理退房',
+            });
+          } else if (b.status === 'cancelled') {
+            entries.push({
+              status: 'cancelled' as const,
+              timestamp: b.updatedAt,
+              operatorName: '系统初始化',
+              remark: '取消预订',
+            });
+          }
           return {
             ...b,
-            statusHistory: [initialEntry],
+            statusHistory: entries,
           };
         });
         const initialClosedDates = getInitialClosedDates(initialRooms);
