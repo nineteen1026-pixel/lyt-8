@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup, RotateCcw, StickyNote } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup, RotateCcw, StickyNote, DollarSign, Clock, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import type { Booking, BookingStatus, GuestProfile, RoomType, ExtraService } from '@/types';
-import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone, ExtraServiceChargeTypeLabels } from '@/types';
+import type { Booking, BookingStatus, GuestProfile, RoomType, ExtraService, Deposit, DepositTransaction } from '@/types';
+import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone, ExtraServiceChargeTypeLabels, DepositStatusLabels, DepositStatusColors, DepositTransactionTypeLabels, DeductionCategoryLabels } from '@/types';
 import Badge from '@/components/Badge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import BookingForm from './BookingForm';
 import Modal from '@/components/Modal';
+import CheckOutInspectionModal from '@/components/CheckOutInspectionModal';
 import { formatDateDisplay, calculateNights, isSameDayStr } from '@/utils/date';
 import { highlightText, containsKeyword } from '@/lib/utils';
 
@@ -72,6 +73,8 @@ export default function BookingList() {
   const [cancelledSuccess, setCancelledSuccess] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<Booking | null>(null);
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
+  const [checkOutModalOpen, setCheckOutModalOpen] = useState(false);
+  const [checkOutBooking, setCheckOutBooking] = useState<Booking | null>(null);
 
   useEffect(() => {
     const action = searchParams.get('action');
@@ -103,6 +106,12 @@ export default function BookingList() {
     profiles.forEach((p) => map.set(p.guestPhone, p));
     return map;
   }, [getGuestProfiles, storeBookings, storeFilter]);
+
+  const { getDepositByBookingId } = useAppStore();
+
+  const getDepositForBooking = (bookingId: string): Deposit | undefined => {
+    return getDepositByBookingId(bookingId);
+  };
 
   const filteredBookings = storeBookings
     .filter((b) => {
@@ -198,7 +207,25 @@ export default function BookingList() {
     return addBooking(data);
   };
 
+  const handleCheckOutClick = (booking: Booking) => {
+    setCheckOutBooking(booking);
+    setDetailBooking(null);
+    setCheckOutModalOpen(true);
+  };
+
+  const handleCheckOutComplete = () => {
+    if (checkOutBooking) {
+      updateBookingStatus(checkOutBooking.id, 'checked-out');
+    }
+    setCheckOutModalOpen(false);
+    setCheckOutBooking(null);
+  };
+
   const handleStatusUpdate = (booking: Booking, status: BookingStatus) => {
+    if (status === 'checked-out') {
+      handleCheckOutClick(booking);
+      return;
+    }
     updateBookingStatus(booking.id, status);
     setDetailBooking(null);
   };
@@ -328,6 +355,9 @@ export default function BookingList() {
                   <th className="text-left text-sm font-medium text-brand-taupe px-5 py-3">
                     状态
                   </th>
+                  <th className="text-left text-sm font-medium text-brand-taupe px-5 py-3">
+                    押金
+                  </th>
                   <th className="text-right text-sm font-medium text-brand-taupe px-5 py-3">
                     操作
                   </th>
@@ -339,6 +369,7 @@ export default function BookingList() {
                   const store = room ? getStoreById(room.storeId) : null;
                   const nights = calculateNights(b.checkIn, b.checkOut);
                   const guestProfile = guestProfileMap.get(b.guestPhone);
+                  const deposit = getDepositForBooking(b.id);
 
                   return (
                     <tr
@@ -443,6 +474,25 @@ export default function BookingList() {
                         >
                           {BookingStatusLabels[b.status]}
                         </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        {deposit ? (
+                          <div>
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${DepositStatusColors[deposit.status]}`}
+                            >
+                              {DepositStatusLabels[deposit.status]}
+                            </span>
+                            <div className="text-xs text-brand-taupe mt-1">
+                              ¥{deposit.collectedAmount} / ¥{deposit.totalAmount}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-xs text-brand-taupe">
+                            <AlertTriangle className="w-3 h-3 text-amber-500" />
+                            未收押金
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1">
@@ -863,6 +913,140 @@ export default function BookingList() {
               </div>
             )}
 
+            {(() => {
+              const deposit = getDepositForBooking(detailBooking.id);
+              if (!deposit) return null;
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-brand-taupe" />
+                    <span className="font-medium text-brand-brown">押金信息</span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${DepositStatusColors[deposit.status]}`}
+                    >
+                      {DepositStatusLabels[deposit.status]}
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg space-y-3">
+                    <div className="grid grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <div className="text-brand-taupe mb-1">押金总额</div>
+                        <div className="font-display font-bold text-lg text-brand-brown">¥{deposit.totalAmount}</div>
+                      </div>
+                      <div>
+                        <div className="text-brand-taupe mb-1">已收取</div>
+                        <div className="font-display font-bold text-lg text-green-600">¥{deposit.collectedAmount}</div>
+                      </div>
+                      <div>
+                        <div className="text-brand-taupe mb-1">已退还</div>
+                        <div className="font-display font-bold text-lg text-blue-600">¥{deposit.refundedAmount}</div>
+                      </div>
+                      <div>
+                        <div className="text-brand-taupe mb-1">已扣款</div>
+                        <div className="font-display font-bold text-lg text-red-600">¥{deposit.deductedAmount}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {deposit.checkOutInspection?.completed && (
+                    <div className="p-4 bg-green-50 rounded-lg space-y-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        <span className="font-medium text-green-800">退房核验已完成</span>
+                      </div>
+                      {deposit.checkOutInspection.notes && (
+                        <div className="text-sm text-green-700">
+                          核验备注：{deposit.checkOutInspection.notes}
+                        </div>
+                      )}
+                      {deposit.checkOutInspection.completedByName && (
+                        <div className="text-xs text-green-600">
+                          核验人：{deposit.checkOutInspection.completedByName}
+                        </div>
+                      )}
+                      {deposit.checkOutInspection.deductionItems && deposit.checkOutInspection.deductionItems.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-green-200 space-y-1">
+                          <div className="text-xs text-green-700 font-medium mb-1">扣款明细：</div>
+                          {deposit.checkOutInspection.deductionItems.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-700">{item.name}</span>
+                                <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-600 rounded">
+                                  {DeductionCategoryLabels[item.category]}
+                                </span>
+                              </div>
+                              <span className="font-medium text-red-600">-¥{item.amount}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {deposit.transactions && deposit.transactions.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-brand-taupe" />
+                        <span className="text-xs text-brand-taupe font-medium">交易流水</span>
+                      </div>
+                      <div className="space-y-2">
+                        {deposit.transactions.map((tx: DepositTransaction) => (
+                          <div key={tx.id} className="p-3 bg-brand-beige/30 rounded-lg">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                    tx.type === 'collect'
+                                      ? 'bg-green-100 text-green-700'
+                                      : tx.type === 'refund'
+                                      ? 'bg-blue-100 text-blue-700'
+                                      : 'bg-red-100 text-red-700'
+                                  }`}
+                                >
+                                  {DepositTransactionTypeLabels[tx.type]}
+                                </span>
+                                <span className="text-xs text-brand-taupe">{tx.operatorName}</span>
+                              </div>
+                              <span
+                                className={`font-display font-bold ${
+                                  tx.type === 'collect'
+                                    ? 'text-green-600'
+                                    : tx.type === 'refund'
+                                    ? 'text-blue-600'
+                                    : 'text-red-600'
+                                }`}
+                              >
+                                {tx.type === 'collect' ? '+' : tx.type === 'refund' ? '-' : '-' }¥{tx.amount}
+                              </span>
+                            </div>
+                            <div className="text-xs text-brand-taupe flex items-center justify-between">
+                              <span>{tx.createdAt ? new Date(tx.createdAt).toLocaleString('zh-CN') : ''}</span>
+                              {tx.paymentMethod && <span>{tx.paymentMethod}</span>}
+                            </div>
+                            {tx.notes && (
+                              <div className="text-xs text-brand-taupe mt-1">备注：{tx.notes}</div>
+                            )}
+                            {tx.deductionItems && tx.deductionItems.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-brand-brown/10 space-y-1">
+                                {tx.deductionItems.map((item) => (
+                                  <div key={item.id} className="flex items-center justify-between text-xs">
+                                    <span className="text-brand-taupe">{item.name}</span>
+                                    <span className="text-red-600">-¥{item.amount}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="flex items-center justify-between pt-4 border-t border-brand-brown/10">
               <span
                 className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${BookingStatusColors[detailBooking.status]}`}
@@ -919,6 +1103,18 @@ export default function BookingList() {
           </div>
         )}
       </Modal>
+
+      {checkOutBooking && (
+        <CheckOutInspectionModal
+          open={checkOutModalOpen}
+          onClose={() => {
+            setCheckOutModalOpen(false);
+            setCheckOutBooking(null);
+          }}
+          booking={checkOutBooking}
+          onComplete={handleCheckOutComplete}
+        />
+      )}
     </div>
   );
 }

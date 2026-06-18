@@ -40,6 +40,12 @@ const actionColorMap: Record<AuditAction, string> = {
   'holidaypricing:create': 'bg-green-100 text-green-700',
   'holidaypricing:update': 'bg-blue-100 text-blue-700',
   'holidaypricing:delete': 'bg-red-100 text-red-700',
+  'booking:deposit:collect': 'bg-green-100 text-green-700',
+  'booking:deposit:refund': 'bg-blue-100 text-blue-700',
+  'booking:deposit:deduct': 'bg-red-100 text-red-700',
+  'longterm:deposit:collect': 'bg-green-100 text-green-700',
+  'longterm:deposit:refund': 'bg-blue-100 text-blue-700',
+  'longterm:deposit:deduct': 'bg-red-100 text-red-700',
 };
 
 export default function AuditLogList() {

@@ -32,6 +32,10 @@ import type {
   HolidayPricingTemplate,
   TodoItem,
   TodoCategory,
+  Deposit,
+  DepositStatus,
+  DepositTransaction,
+  DeductionItem,
 } from '@/types';
 import { normalizePhone, RolePermissions, ClosedDateReasonLabels, LongTermContractStatusLabels, PriceAdjustmentTypeLabels } from '@/types';
 import { generateId, isDateOverlap, isDateInRange, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate, calculateMonths, addMonthsStr, getContractPeriodLabel, getMonthDueDate } from '@/utils/date';
@@ -187,6 +191,7 @@ interface AppState {
 
   longTermContracts: LongTermContract[];
   holidayPricingTemplates: HolidayPricingTemplate[];
+  deposits: Deposit[];
   addLongTermContract: (contract: Omit<LongTermContract, 'id' | 'createdAt' | 'updatedAt' | 'paymentRecords' | 'status' | 'paidAmount' | 'totalAmount' | 'months' | 'endDate' | 'renewCount'> & { endDate?: string; months?: number }) => boolean;
   updateLongTermContract: (id: string, contract: Partial<LongTermContract>) => boolean;
   cancelLongTermContract: (id: string, reason: string) => void;
@@ -209,6 +214,15 @@ interface AppState {
   getHolidayPricingTemplates: () => HolidayPricingTemplate[];
   getAdjustedPriceForRoom: (roomId: string, date: string) => number | null;
   getRoomAdjustedPrices: (roomId: string, startDate: string, endDate: string) => Record<string, number>;
+
+  createDeposit: (data: { bookingId?: string; contractId?: string; totalAmount: number }) => Deposit | null;
+  getDepositById: (id: string) => Deposit | undefined;
+  getDepositByBookingId: (bookingId: string) => Deposit | undefined;
+  getDepositByContractId: (contractId: string) => Deposit | undefined;
+  collectDeposit: (depositId: string, amount: number, paymentMethod?: string, notes?: string) => boolean;
+  completeCheckOutInspection: (depositId: string, inspection: { notes?: string; deductionItems: DeductionItem[] }) => boolean;
+  refundDeposit: (depositId: string, amount: number, paymentMethod?: string, notes?: string, deductionItems?: DeductionItem[]) => boolean;
+  updateDepositStatus: (depositId: string, status: DepositStatus) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -225,6 +239,7 @@ export const useAppStore = create<AppState>()(
       waitlistNotifications: [],
       longTermContracts: [],
       holidayPricingTemplates: [],
+      deposits: [],
       users: defaultUsers,
       currentUser: defaultUsers[0],
       auditLogs: [],
@@ -2311,6 +2326,246 @@ export const useAppStore = create<AppState>()(
           }
         });
         return result;
+      },
+
+      createDeposit: (data) => {
+        if (!get().hasPermission('booking:deposit')) return null;
+        if (!data.bookingId && !data.contractId) return null;
+
+        const now = new Date().toISOString();
+        const newDeposit: Deposit = {
+          id: generateId(),
+          bookingId: data.bookingId,
+          contractId: data.contractId,
+          totalAmount: data.totalAmount,
+          collectedAmount: 0,
+          refundedAmount: 0,
+          deductedAmount: 0,
+          status: 'pending',
+          transactions: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        set((state) => ({ deposits: [...state.deposits, newDeposit] }));
+        return newDeposit;
+      },
+
+      getDepositById: (id) => {
+        return get().deposits.find((d) => d.id === id);
+      },
+
+      getDepositByBookingId: (bookingId) => {
+        return get().deposits.find((d) => d.bookingId === bookingId);
+      },
+
+      getDepositByContractId: (contractId) => {
+        return get().deposits.find((d) => d.contractId === contractId);
+      },
+
+      collectDeposit: (depositId, amount, paymentMethod, notes) => {
+        if (!get().hasPermission('booking:deposit')) return false;
+        const deposit = get().getDepositById(depositId);
+        if (!deposit) return false;
+
+        const now = new Date().toISOString();
+        const { currentUser } = get();
+        const newCollectedAmount = deposit.collectedAmount + amount;
+
+        const transaction: DepositTransaction = {
+          id: generateId(),
+          bookingId: deposit.bookingId,
+          contractId: deposit.contractId,
+          type: 'collect',
+          amount,
+          paymentMethod,
+          operatorId: currentUser.id,
+          operatorName: currentUser.name,
+          notes,
+          createdAt: now,
+        };
+
+        let newStatus: DepositStatus = deposit.status;
+        if (newCollectedAmount >= deposit.totalAmount) {
+          newStatus = 'collected';
+        } else if (newCollectedAmount > 0) {
+          newStatus = 'collected';
+        }
+
+        set((state) => ({
+          deposits: state.deposits.map((d) =>
+            d.id === depositId
+              ? {
+                  ...d,
+                  collectedAmount: newCollectedAmount,
+                  status: newStatus,
+                  transactions: [...d.transactions, transaction],
+                  collectedAt: newStatus === 'collected' ? now : d.collectedAt,
+                  updatedAt: now,
+                }
+              : d
+          ),
+        }));
+
+        const booking = deposit.bookingId ? get().getBookingById(deposit.bookingId) : null;
+        const contract = deposit.contractId ? get().getLongTermContractById(deposit.contractId) : null;
+        const targetName = booking?.guestName || contract?.guestName || '';
+        const action = deposit.bookingId ? 'booking:deposit:collect' : 'longterm:deposit:collect';
+        get().addAuditLog(
+          action,
+          depositId,
+          targetName,
+          `收取押金 ¥${amount}${paymentMethod ? ` (${paymentMethod})` : ''}，总额 ¥${deposit.totalAmount}`
+        );
+
+        return true;
+      },
+
+      completeCheckOutInspection: (depositId, inspection) => {
+        if (!get().hasPermission('booking:deposit')) return false;
+        const deposit = get().getDepositById(depositId);
+        if (!deposit) return false;
+
+        const now = new Date().toISOString();
+        const { currentUser } = get();
+
+        set((state) => ({
+          deposits: state.deposits.map((d) =>
+            d.id === depositId
+              ? {
+                  ...d,
+                  checkOutInspection: {
+                    completed: true,
+                    completedAt: now,
+                    completedBy: currentUser.id,
+                    completedByName: currentUser.name,
+                    notes: inspection.notes,
+                    deductionItems: inspection.deductionItems,
+                  },
+                  updatedAt: now,
+                }
+              : d
+          ),
+        }));
+
+        return true;
+      },
+
+      refundDeposit: (depositId, amount, paymentMethod, notes, deductionItems) => {
+        if (!get().hasPermission('booking:deposit')) return false;
+        const deposit = get().getDepositById(depositId);
+        if (!deposit) return false;
+
+        const now = new Date().toISOString();
+        const { currentUser } = get();
+        const newRefundedAmount = deposit.refundedAmount + amount;
+        const totalDeduction = deductionItems?.reduce((sum, item) => sum + item.amount, 0) || 0;
+        const newDeductedAmount = deposit.deductedAmount + totalDeduction;
+
+        const remainingDeposit = deposit.collectedAmount - deposit.refundedAmount - deposit.deductedAmount;
+        if (amount + totalDeduction > remainingDeposit) {
+          return false;
+        }
+
+        const transactions: DepositTransaction[] = [];
+
+        if (amount > 0) {
+          transactions.push({
+            id: generateId(),
+            bookingId: deposit.bookingId,
+            contractId: deposit.contractId,
+            type: 'refund',
+            amount,
+            paymentMethod,
+            operatorId: currentUser.id,
+            operatorName: currentUser.name,
+            notes,
+            createdAt: now,
+          });
+        }
+
+        if (totalDeduction > 0 && deductionItems && deductionItems.length > 0) {
+          transactions.push({
+            id: generateId(),
+            bookingId: deposit.bookingId,
+            contractId: deposit.contractId,
+            type: 'deduct',
+            amount: totalDeduction,
+            deductionItems,
+            operatorId: currentUser.id,
+            operatorName: currentUser.name,
+            notes,
+            createdAt: now,
+          });
+        }
+
+        let newStatus: DepositStatus = deposit.status;
+        const totalDisposed = newRefundedAmount + newDeductedAmount;
+        if (totalDisposed >= deposit.collectedAmount) {
+          if (newDeductedAmount > 0 && newRefundedAmount > 0) {
+            newStatus = 'refunded';
+          } else if (newDeductedAmount > 0) {
+            newStatus = 'deducted';
+          } else {
+            newStatus = 'refunded';
+          }
+        } else if (newRefundedAmount > 0 || newDeductedAmount > 0) {
+          newStatus = 'partial-refunded';
+        }
+
+        set((state) => ({
+          deposits: state.deposits.map((d) =>
+            d.id === depositId
+              ? {
+                  ...d,
+                  refundedAmount: newRefundedAmount,
+                  deductedAmount: newDeductedAmount,
+                  status: newStatus,
+                  transactions: [...d.transactions, ...transactions],
+                  refundedAt: newStatus === 'refunded' || newStatus === 'deducted' ? now : d.refundedAt,
+                  updatedAt: now,
+                }
+              : d
+          ),
+        }));
+
+        const booking = deposit.bookingId ? get().getBookingById(deposit.bookingId) : null;
+        const contract = deposit.contractId ? get().getLongTermContractById(deposit.contractId) : null;
+        const targetName = booking?.guestName || contract?.guestName || '';
+
+        if (amount > 0) {
+          const refundAction = deposit.bookingId ? 'booking:deposit:refund' : 'longterm:deposit:refund';
+          get().addAuditLog(
+            refundAction,
+            depositId,
+            targetName,
+            `退还押金 ¥${amount}${paymentMethod ? ` (${paymentMethod})` : ''}`
+          );
+        }
+
+        if (totalDeduction > 0) {
+          const deductAction = deposit.bookingId ? 'booking:deposit:deduct' : 'longterm:deposit:deduct';
+          const deductionDetails = deductionItems?.map((item) => `${item.name}: ¥${item.amount}`).join('; ');
+          get().addAuditLog(
+            deductAction,
+            depositId,
+            targetName,
+            `押金扣款 ¥${totalDeduction}，明细：${deductionDetails}`
+          );
+        }
+
+        return true;
+      },
+
+      updateDepositStatus: (depositId, status) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          deposits: state.deposits.map((d) =>
+            d.id === depositId
+              ? { ...d, status, updatedAt: now }
+              : d
+          ),
+        }));
       },
     }),
     {

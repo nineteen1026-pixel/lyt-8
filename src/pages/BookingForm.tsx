@@ -25,6 +25,8 @@ import {
   Plus,
   Minus,
   Check,
+  DollarSign,
+  CreditCard,
 } from 'lucide-react';
 
 interface BookingFormProps {
@@ -53,7 +55,7 @@ export default function BookingForm({
   prefillCheckIn,
   prefillCheckOut,
 }: BookingFormProps) {
-  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById, getMinStayForRoom, checkMinStayCompliance, hasClosedDateInRange, hasPermission, addWaitlistEntry, getExtraServicesByStore, getExtraServiceById, calculateExtraServicesPrice } = useAppStore();
+  const { rooms, stores, isRoomAvailable, getRoomById, getStoreById, getMinStayForRoom, checkMinStayCompliance, hasClosedDateInRange, hasPermission, addWaitlistEntry, getExtraServicesByStore, getExtraServiceById, calculateExtraServicesPrice, createDeposit, collectDeposit, getDepositByBookingId } = useAppStore();
   const activeRooms = rooms.filter((r) => r.status === 'active');
   const canCreateWaitlist = hasPermission('waitlist:create');
 
@@ -71,6 +73,8 @@ export default function BookingForm({
     roomPrice: 0,
     extraServicesPrice: 0,
     extraServices: [] as SelectedExtraService[],
+    depositAmount: 0,
+    depositPaymentMethod: '' as string,
   });
 
   const [storeFilter, setStoreFilter] = useState<string>('all');
@@ -83,10 +87,21 @@ export default function BookingForm({
     return activeRooms.filter((r) => r.storeId === storeFilter);
   }, [activeRooms, storeFilter]);
 
+  const existingDeposit = useMemo(() => {
+    if (!booking) return null;
+    return getDepositByBookingId(booking.id);
+  }, [booking, getDepositByBookingId]);
+
+  const defaultDepositAmount = useMemo(() => {
+    if (!formData.roomPrice) return 0;
+    return Math.round(formData.roomPrice * 1);
+  }, [formData.roomPrice]);
+
   useEffect(() => {
     if (booking) {
       const room = getRoomById(booking.roomId);
       if (room) setStoreFilter(room.storeId);
+      const deposit = getDepositByBookingId(booking.id);
       setFormData({
         roomId: booking.roomId,
         guestName: booking.guestName,
@@ -101,6 +116,8 @@ export default function BookingForm({
         roomPrice: booking.roomPrice ?? booking.totalPrice,
         extraServicesPrice: booking.extraServicesPrice ?? 0,
         extraServices: booking.extraServices ?? [],
+        depositAmount: deposit ? deposit.totalAmount : Math.round((booking.roomPrice ?? booking.totalPrice) * 1),
+        depositPaymentMethod: '',
       });
     } else {
       const defaultRoomId = prefillRoomId || (roomsByStore[0]?.id || activeRooms[0]?.id || '');
@@ -122,6 +139,8 @@ export default function BookingForm({
         roomPrice: 0,
         extraServicesPrice: 0,
         extraServices: [],
+        depositAmount: 0,
+        depositPaymentMethod: '',
       });
     }
     setErrors({});
@@ -150,11 +169,13 @@ export default function BookingForm({
         nights,
         formData.guests
       );
+      const autoDepositAmount = Math.round(roomPrice * 1);
       setFormData((prev) => ({
         ...prev,
         roomPrice,
         extraServicesPrice,
         totalPrice: roomPrice + extraServicesPrice,
+        depositAmount: prev.depositAmount === 0 ? autoDepositAmount : prev.depositAmount,
       }));
     }
   }, [formData.roomId, formData.checkIn, formData.checkOut, formData.extraServices, formData.guests]);
@@ -378,6 +399,24 @@ export default function BookingForm({
     if (!success) {
       setSubmitError('预订保存失败，可能是房间在该时间段已被占用。');
     } else {
+      if (!booking && formData.depositAmount > 0) {
+        const newBookings = useAppStore.getState().bookings;
+        const newBooking = newBookings.find(
+          (b) => b.guestPhone === submitData.guestPhone && b.checkIn === submitData.checkIn && b.checkOut === submitData.checkOut
+        );
+        if (newBooking) {
+          createDeposit({
+            bookingId: newBooking.id,
+            totalAmount: formData.depositAmount,
+          });
+          if (formData.depositPaymentMethod && formData.depositAmount > 0) {
+            const deposit = getDepositByBookingId(newBooking.id);
+            if (deposit) {
+              collectDeposit(deposit.id, formData.depositAmount, formData.depositPaymentMethod, '预订时收取押金');
+            }
+          }
+        }
+      }
       onClose();
     }
   };
@@ -740,6 +779,82 @@ export default function BookingForm({
             placeholder="特殊需求等..."
           />
         </div>
+
+        {!isWaitlistMode && (
+          <div className="p-4 bg-blue-50 rounded-lg space-y-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-blue-600" />
+              <span className="font-medium text-blue-800">押金管理</span>
+              {existingDeposit && (
+                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
+                  已有押金记录
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label-base mb-1">押金金额（元）</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="input-base"
+                  value={formData.depositAmount}
+                  onChange={(e) =>
+                    setFormData({ ...formData, depositAmount: Number(e.target.value) })
+                  }
+                  placeholder="建议为房费的1-2倍"
+                />
+                <p className="text-xs text-blue-600 mt-1">
+                  系统建议：¥{defaultDepositAmount}（房费×1）
+                </p>
+              </div>
+              <div>
+                <label className="label-base mb-1">支付方式</label>
+                <select
+                  className="input-base"
+                  value={formData.depositPaymentMethod}
+                  onChange={(e) =>
+                    setFormData({ ...formData, depositPaymentMethod: e.target.value })
+                  }
+                >
+                  <option value="">暂不收取</option>
+                  <option value="微信支付">微信支付</option>
+                  <option value="支付宝">支付宝</option>
+                  <option value="现金">现金</option>
+                  <option value="银行卡">银行卡</option>
+                  <option value="其他">其他</option>
+                </select>
+                {formData.depositPaymentMethod && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <CreditCard className="w-3 h-3" />
+                    预订确认后将自动收取押金
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {existingDeposit && (
+              <div className="p-3 bg-white rounded-lg space-y-2">
+                <div className="text-xs text-blue-700 font-medium">当前押金状态：</div>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <div className="text-brand-taupe text-xs">押金总额</div>
+                    <div className="font-bold text-brand-brown">¥{existingDeposit.totalAmount}</div>
+                  </div>
+                  <div>
+                    <div className="text-brand-taupe text-xs">已收取</div>
+                    <div className="font-bold text-green-600">¥{existingDeposit.collectedAmount}</div>
+                  </div>
+                  <div>
+                    <div className="text-brand-taupe text-xs">当前状态</div>
+                    <div className="font-medium text-brand-orange">{existingDeposit.status}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-4 border-t border-brand-brown/10">
           <button type="button" onClick={onClose} className="btn-secondary">

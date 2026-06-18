@@ -32,6 +32,7 @@ export type Permission =
   | 'booking:restore'
   | 'booking:checkin'
   | 'booking:checkout'
+  | 'booking:deposit'
   | 'waitlist:view'
   | 'waitlist:create'
   | 'waitlist:update'
@@ -49,6 +50,7 @@ export type Permission =
   | 'longterm:update'
   | 'longterm:cancel'
   | 'longterm:renew'
+  | 'longterm:deposit'
   | 'holidaypricing:view'
   | 'holidaypricing:create'
   | 'holidaypricing:update'
@@ -78,6 +80,7 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'booking:restore',
     'booking:checkin',
     'booking:checkout',
+    'booking:deposit',
     'waitlist:view',
     'waitlist:create',
     'waitlist:update',
@@ -95,6 +98,7 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'longterm:update',
     'longterm:cancel',
     'longterm:renew',
+    'longterm:deposit',
     'holidaypricing:view',
     'holidaypricing:create',
     'holidaypricing:update',
@@ -117,6 +121,7 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'booking:restore',
     'booking:checkin',
     'booking:checkout',
+    'booking:deposit',
     'waitlist:view',
     'waitlist:create',
     'waitlist:update',
@@ -131,6 +136,7 @@ export const RolePermissions: Record<UserRole, Permission[]> = {
     'longterm:update',
     'longterm:cancel',
     'longterm:renew',
+    'longterm:deposit',
     'holidaypricing:view',
     'holidaypricing:create',
     'holidaypricing:update',
@@ -164,6 +170,9 @@ export type AuditAction =
   | 'booking:restore'
   | 'booking:checkin'
   | 'booking:checkout'
+  | 'booking:deposit:collect'
+  | 'booking:deposit:refund'
+  | 'booking:deposit:deduct'
   | 'waitlist:create'
   | 'waitlist:update'
   | 'waitlist:cancel'
@@ -177,6 +186,9 @@ export type AuditAction =
   | 'longterm:cancel'
   | 'longterm:renew'
   | 'longterm:payment'
+  | 'longterm:deposit:collect'
+  | 'longterm:deposit:refund'
+  | 'longterm:deposit:deduct'
   | 'holidaypricing:create'
   | 'holidaypricing:update'
   | 'holidaypricing:delete';
@@ -200,6 +212,9 @@ export const AuditActionLabels: Record<AuditAction, string> = {
   'booking:restore': '恢复预订',
   'booking:checkin': '办理入住',
   'booking:checkout': '办理退房',
+  'booking:deposit:collect': '收取押金',
+  'booking:deposit:refund': '退还押金',
+  'booking:deposit:deduct': '押金扣款',
   'waitlist:create': '新增候补登记',
   'waitlist:update': '更新候补登记',
   'waitlist:cancel': '取消候补登记',
@@ -213,6 +228,9 @@ export const AuditActionLabels: Record<AuditAction, string> = {
   'longterm:cancel': '取消长租合同',
   'longterm:renew': '续签长租合同',
   'longterm:payment': '长租租金支付',
+  'longterm:deposit:collect': '收取长租押金',
+  'longterm:deposit:refund': '退还长租押金',
+  'longterm:deposit:deduct': '长租押金扣款',
   'holidaypricing:create': '创建节假日调价模板',
   'holidaypricing:update': '更新节假日调价模板',
   'holidaypricing:delete': '删除节假日调价模板',
@@ -689,4 +707,88 @@ export interface TodoItem {
   targetType: 'booking' | 'cleaning' | 'contract' | 'room' | 'payment';
   navigatePath: string;
   priority: 'urgent' | 'normal' | 'low';
+}
+
+export type DepositStatus = 'pending' | 'collected' | 'partial-refunded' | 'refunded' | 'deducted';
+
+export const DepositStatusLabels: Record<DepositStatus, string> = {
+  pending: '待收取',
+  collected: '已收取',
+  'partial-refunded': '部分退还',
+  refunded: '已退还',
+  deducted: '已扣款',
+};
+
+export const DepositStatusColors: Record<DepositStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  collected: 'bg-blue-100 text-blue-700',
+  'partial-refunded': 'bg-purple-100 text-purple-700',
+  refunded: 'bg-green-100 text-green-700',
+  deducted: 'bg-red-100 text-red-700',
+};
+
+export type DepositTransactionType = 'collect' | 'refund' | 'deduct';
+
+export const DepositTransactionTypeLabels: Record<DepositTransactionType, string> = {
+  collect: '收取',
+  refund: '退还',
+  deduct: '扣款',
+};
+
+export interface DeductionItem {
+  id: string;
+  name: string;
+  description: string;
+  amount: number;
+  category: 'damage' | 'cleaning' | 'missing' | 'other';
+  photoUrls?: string[];
+}
+
+export const DeductionCategoryLabels: Record<DeductionItem['category'], string> = {
+  damage: '物品损坏',
+  cleaning: '清洁费用',
+  missing: '物品遗失',
+  other: '其他费用',
+};
+
+export interface DepositTransaction {
+  id: string;
+  bookingId?: string;
+  contractId?: string;
+  type: DepositTransactionType;
+  amount: number;
+  paymentMethod?: string;
+  deductionItems?: DeductionItem[];
+  operatorId: string;
+  operatorName: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Deposit {
+  id: string;
+  bookingId?: string;
+  contractId?: string;
+  totalAmount: number;
+  collectedAmount: number;
+  refundedAmount: number;
+  deductedAmount: number;
+  status: DepositStatus;
+  transactions: DepositTransaction[];
+  collectedAt?: string;
+  refundedAt?: string;
+  checkOutInspection?: {
+    completed: boolean;
+    completedAt?: string;
+    completedBy?: string;
+    completedByName?: string;
+    notes?: string;
+    deductionItems: DeductionItem[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookingWithDeposit extends Booking {
+  deposit?: Deposit;
 }
