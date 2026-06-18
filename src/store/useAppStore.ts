@@ -30,6 +30,8 @@ import type {
   ContractExpiryInfo,
   ExpiryAlertLevel,
   HolidayPricingTemplate,
+  TodoItem,
+  TodoCategory,
 } from '@/types';
 import { normalizePhone, RolePermissions, ClosedDateReasonLabels, LongTermContractStatusLabels, PriceAdjustmentTypeLabels } from '@/types';
 import { generateId, isDateOverlap, isDateInRange, todayStr, isSameDayStr, getDaysInRange, getMonthsInRange, getMonthKey, calculateNights, getDaysArray, startOfMonthStr, endOfMonthStr, formatDate, calculateMonths, addMonthsStr, getContractPeriodLabel, getMonthDueDate } from '@/utils/date';
@@ -175,6 +177,12 @@ interface AppState {
     todayCheckOuts: number;
     maintenanceRooms: number;
     total: number;
+  };
+  getTodayTodos: (storeId?: StoreIdFilter) => TodoItem[];
+  getTodoSummary: (storeId?: StoreIdFilter) => {
+    total: number;
+    byCategory: Record<TodoCategory, number>;
+    urgentCount: number;
   };
 
   longTermContracts: LongTermContract[];
@@ -1431,6 +1439,151 @@ export const useAppStore = create<AppState>()(
           maintenanceRooms,
           total: pendingCleaning + todayCheckIns + todayCheckOuts + maintenanceRooms,
         };
+      },
+
+      getTodayTodos: (storeId = 'all') => {
+        const { getRoomsByStore, getBookingsByStore, getCleaningTasksByStore, getRoomById, getExpiringContracts, getOverduePayments, getContractExpiryInfo } = get();
+        const rooms = getRoomsByStore(storeId);
+        const bookings = getBookingsByStore(storeId);
+        const cleaningTasks = getCleaningTasksByStore(storeId);
+        const today = todayStr();
+        const todos: TodoItem[] = [];
+
+        const todayCheckIns = bookings.filter(
+          (b) =>
+            b.status !== 'cancelled' &&
+            b.status !== 'checked-out' &&
+            isSameDayStr(b.checkIn, today)
+        );
+        todayCheckIns.forEach((b) => {
+          const room = getRoomById(b.roomId);
+          todos.push({
+            id: `checkin-${b.id}`,
+            category: 'checkIn',
+            title: `${b.guestName} 办理入住`,
+            subtitle: b.status === 'checked-in' ? '已入住' : '待入住',
+            roomInfo: room ? `${room.roomNumber} ${room.name}` : '未知房间',
+            timeInfo: `入住日期: ${b.checkIn}`,
+            targetId: b.id,
+            targetType: 'booking',
+            navigatePath: '/bookings',
+            priority: b.status === 'checked-in' ? 'low' : 'normal',
+          });
+        });
+
+        const todayCheckOuts = bookings.filter(
+          (b) =>
+            b.status !== 'cancelled' &&
+            b.status !== 'checked-out' &&
+            isSameDayStr(b.checkOut, today)
+        );
+        todayCheckOuts.forEach((b) => {
+          const room = getRoomById(b.roomId);
+          todos.push({
+            id: `checkout-${b.id}`,
+            category: 'checkOut',
+            title: `${b.guestName} 办理退房`,
+            subtitle: b.status === 'checked-in' ? '当前在住' : '待退房',
+            roomInfo: room ? `${room.roomNumber} ${room.name}` : '未知房间',
+            timeInfo: `退房日期: ${b.checkOut}`,
+            targetId: b.id,
+            targetType: 'booking',
+            navigatePath: '/bookings',
+            priority: 'urgent',
+          });
+        });
+
+        const pendingCleaning = cleaningTasks.filter(
+          (t) => t.status !== 'completed' && isSameDayStr(t.scheduledDate, today)
+        );
+        pendingCleaning.forEach((t) => {
+          const room = getRoomById(t.roomId);
+          todos.push({
+            id: `cleaning-${t.id}`,
+            category: 'cleaning',
+            title: room ? `${room.roomNumber} ${room.name}` : '房间保洁',
+            subtitle: t.guestName ? `${t.guestName} 退房后保洁` : '定期保洁',
+            roomInfo: room ? `${room.roomNumber} ${room.name}` : undefined,
+            timeInfo: `计划日期: ${t.scheduledDate}`,
+            targetId: t.id,
+            targetType: 'cleaning',
+            navigatePath: '/cleaning-tasks',
+            priority: t.status === 'in-progress' ? 'normal' : 'urgent',
+          });
+        });
+
+        const maintenanceRooms = rooms.filter((r) => r.status === 'maintenance');
+        maintenanceRooms.forEach((r) => {
+          todos.push({
+            id: `maintenance-${r.id}`,
+            category: 'maintenance',
+            title: `${r.roomNumber} ${r.name} 维护中`,
+            subtitle: '房间状态为维护中，请及时处理',
+            roomInfo: `${r.roomNumber} ${r.name}`,
+            targetId: r.id,
+            targetType: 'room',
+            navigatePath: '/rooms',
+            priority: 'normal',
+          });
+        });
+
+        const expiringContracts = getExpiringContracts(15, storeId);
+        expiringContracts.forEach((c) => {
+          const room = getRoomById(c.roomId);
+          const expiryInfo = getContractExpiryInfo(c.id);
+          todos.push({
+            id: `renewal-${c.id}`,
+            category: 'renewal',
+            title: `${c.guestName} 合同即将到期`,
+            subtitle: expiryInfo?.message || '建议提前联系续住',
+            roomInfo: room ? `${room.roomNumber} ${room.name}` : '未知房间',
+            timeInfo: `到期日期: ${c.endDate}`,
+            targetId: c.id,
+            targetType: 'contract',
+            navigatePath: '/long-term',
+            priority: expiryInfo?.alertLevel === 'urgent' ? 'urgent' : 'normal',
+          });
+        });
+
+        const overduePayments = getOverduePayments(storeId);
+        overduePayments.forEach((p) => {
+          todos.push({
+            id: `overdue-${p.id}`,
+            category: 'overdue',
+            title: `第${p.monthIndex + 1}期租金逾期`,
+            subtitle: `应付: ¥${p.amount} · 已付: ¥${p.paidAmount}`,
+            timeInfo: `应缴日期: ${p.dueDate}`,
+            amount: p.amount - p.paidAmount,
+            targetId: p.id,
+            targetType: 'payment',
+            navigatePath: '/long-term',
+            priority: 'urgent',
+          });
+        });
+
+        const priorityOrder = { urgent: 0, normal: 1, low: 2 };
+        return todos.sort((a, b) => {
+          if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          }
+          const categoryOrder: Record<TodoCategory, number> = {
+            overdue: 0, checkOut: 1, checkIn: 2, cleaning: 3, renewal: 4, maintenance: 5,
+          };
+          return categoryOrder[a.category] - categoryOrder[b.category];
+        });
+      },
+
+      getTodoSummary: (storeId = 'all') => {
+        const todos = get().getTodayTodos(storeId);
+        const byCategory: Record<TodoCategory, number> = {
+          checkIn: 0, checkOut: 0, cleaning: 0, renewal: 0, maintenance: 0, overdue: 0,
+        };
+        let urgentCount = 0;
+        todos.forEach((t) => {
+          byCategory[t.category]++;
+          if (t.priority === 'urgent') urgentCount++;
+        });
+        return { total: todos.length, byCategory, urgentCount };
       },
 
       addClosedDate: (closedDate) => {

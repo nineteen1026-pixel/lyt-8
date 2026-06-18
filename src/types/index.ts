@@ -647,3 +647,46 @@ export interface ContractExpiryInfo {
   alertLevel: ExpiryAlertLevel;
   message: string;
 }
+
+export type TodoCategory = 'checkIn' | 'checkOut' | 'cleaning' | 'renewal' | 'maintenance' | 'overdue';
+
+export const TodoCategoryLabels: Record<TodoCategory, string> = {
+  checkIn: '今日入住',
+  checkOut: '今日退房',
+  cleaning: '保洁任务',
+  renewal: '续住提醒',
+  maintenance: '维护中房间',
+  overdue: '逾期租金',
+};
+
+export const TodoCategoryColors: Record<TodoCategory, string> = {
+  checkIn: 'bg-brand-green/10 text-brand-green border-brand-green/30',
+  checkOut: 'bg-brand-orange/10 text-brand-orange border-brand-orange/30',
+  cleaning: 'bg-amber-50 text-amber-700 border-amber-200',
+  renewal: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  maintenance: 'bg-rose-50 text-rose-700 border-rose-200',
+  overdue: 'bg-red-50 text-red-700 border-red-200',
+};
+
+export const TodoCategoryBadgeColors: Record<TodoCategory, string> = {
+  checkIn: 'bg-brand-green text-white',
+  checkOut: 'bg-brand-orange text-white',
+  cleaning: 'bg-amber-500 text-white',
+  renewal: 'bg-indigo-500 text-white',
+  maintenance: 'bg-rose-500 text-white',
+  overdue: 'bg-red-500 text-white',
+};
+
+export interface TodoItem {
+  id: string;
+  category: TodoCategory;
+  title: string;
+  subtitle: string;
+  roomInfo?: string;
+  timeInfo?: string;
+  amount?: number;
+  targetId: string;
+  targetType: 'booking' | 'cleaning' | 'contract' | 'room' | 'payment';
+  navigatePath: string;
+  priority: 'urgent' | 'normal' | 'low';
+}

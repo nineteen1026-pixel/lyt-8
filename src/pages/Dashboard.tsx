@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import Badge from '@/components/Badge';
+import TodayTodoCenter from '@/components/TodayTodoCenter';
 import { BookingStatusColors, BookingStatusLabels, LongTermContractStatusColors, LongTermContractStatusLabels } from '@/types';
 import { todayStr, isSameDayStr, formatDateDisplay } from '@/utils/date';
 
@@ -157,6 +158,8 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      <TodayTodoCenter storeFilter={storeFilter} />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
         {statCards.map((card, idx) => {
