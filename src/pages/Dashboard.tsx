@@ -21,7 +21,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import TodayTodoCenter from '@/components/TodayTodoCenter';
 import { LongTermContractStatusColors, LongTermContractStatusLabels } from '@/types';
-import { todayStr, formatDateDisplay } from '@/utils/date';
+import { todayStr, formatDateDisplay, startOfMonthStr } from '@/utils/date';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -143,6 +143,11 @@ export default function Dashboard() {
               onClick={() => {
                 if (card.label === '待处理任务') {
                   navigate('/cleaning-tasks');
+                } else if (card.label === '本月营收' || card.label === '今日营收') {
+                  const today = new Date();
+                  const start = startOfMonthStr(today);
+                  const end = todayStr();
+                  navigate(`/reports?startDate=${start}&endDate=${end}&scrollTo=revenue-trend`);
                 }
               }}
             >
@@ -341,14 +346,27 @@ export default function Dashboard() {
                 营收概览
               </h2>
               <button
-                onClick={() => navigate('/reports')}
+                onClick={() => {
+                  const today = new Date();
+                  const start = startOfMonthStr(today);
+                  const end = todayStr();
+                  navigate(`/reports?startDate=${start}&endDate=${end}&scrollTo=revenue-trend`);
+                }}
                 className="text-xs text-brand-brown hover:text-brand-brownLight flex items-center gap-1"
               >
                 查看详情 <ArrowRight className="w-3 h-3" />
               </button>
             </div>
             <div className="space-y-4">
-              <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl">
+              <div
+                className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => {
+                  const today = new Date();
+                  const start = startOfMonthStr(today);
+                  const end = todayStr();
+                  navigate(`/reports?startDate=${start}&endDate=${end}&scrollTo=revenue-trend`);
+                }}
+              >
                 <div className="text-xs text-brand-taupe mb-1">本月营收</div>
                 <div className="font-display text-2xl font-bold text-brand-orange">
                   ¥{Math.round(revenueStats.monthRevenue).toLocaleString()}
@@ -365,7 +383,15 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-brand-beige/50 rounded-lg">
+                <div
+                  className="p-3 bg-brand-beige/50 rounded-lg cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => {
+                    const today = new Date();
+                    const start = startOfMonthStr(today);
+                    const end = todayStr();
+                    navigate(`/reports?startDate=${start}&endDate=${end}&scrollTo=revenue-trend`);
+                  }}
+                >
                   <div className="text-xs text-brand-taupe mb-1">今日营收</div>
                   <div className="font-display text-lg font-bold text-brand-brown">
                     ¥{Math.round(revenueStats.todayRevenue)}

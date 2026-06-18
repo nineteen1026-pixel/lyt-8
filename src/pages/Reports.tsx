@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   BarChart3,
   TrendingUp,
@@ -26,6 +27,7 @@ import {
 import { format, parseISO, subMonths, subDays, addDays, addMonths } from 'date-fns';
 
 export default function Reports() {
+  const location = useLocation();
   const {
     stores,
     getDailyReport,
@@ -34,13 +36,35 @@ export default function Reports() {
   } = useAppStore();
   const canExport = hasPermission('report:export');
   const [storeFilter, setStoreFilter] = useState<string>('all');
-  const [granularity, setGranularity] = useState<ReportGranularity>('month');
+  const [granularity, setGranularity] = useState<ReportGranularity>('day');
   const [startDate, setStartDate] = useState(() => {
     const d = subMonths(new Date(), 5);
     return format(startOfMonthStr(d), 'yyyy-MM-dd');
   });
   const [endDate, setEndDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const revenueTrendRef = useRef<HTMLDivElement>(null);
+  const [hasScrolled, setHasScrolled] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const start = params.get('startDate');
+    const end = params.get('endDate');
+    const scrollTo = params.get('scrollTo');
+
+    if (start && end) {
+      setStartDate(start);
+      setEndDate(end);
+      setGranularity('day');
+    }
+
+    if (scrollTo === 'revenue-trend' && revenueTrendRef.current && !hasScrolled) {
+      setTimeout(() => {
+        revenueTrendRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHasScrolled(true);
+      }, 100);
+    }
+  }, [location.search, hasScrolled]);
 
   const displayStart = granularity === 'day' ? startDate : getMonthKey(startDate);
   const displayEnd = granularity === 'day' ? endDate : getMonthKey(endDate);
@@ -476,7 +500,7 @@ export default function Reports() {
           </div>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6" ref={revenueTrendRef} id="revenue-trend">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-5 h-5 text-brand-brown" />
             <h3 className="font-display text-lg font-semibold text-brand-brown">
