@@ -290,6 +290,25 @@ export const useAppStore = create<AppState>()(
             }));
             set({ rooms: migratedRooms });
           }
+          const hasMissingStatusHistory = bookings.some(
+            (b) => !b.statusHistory || b.statusHistory.length === 0
+          );
+          if (hasMissingStatusHistory) {
+            const migratedBookings = bookings.map((b) => {
+              if (b.statusHistory && b.statusHistory.length > 0) return b;
+              const initialEntry: import('@/types').StatusTimelineEntry = {
+                status: b.status,
+                timestamp: b.createdAt,
+                operatorName: '系统初始化',
+                remark: b.status === 'checked-out' ? '已完成入住' : b.status === 'checked-in' ? '已办理入住' : b.status === 'cancelled' ? '预订已取消' : '预订已确认',
+              };
+              return {
+                ...b,
+                statusHistory: [initialEntry],
+              };
+            });
+            set({ bookings: migratedBookings });
+          }
           expireOldWaitlistEntries();
           updateLongTermContractStatuses();
           updatePaymentRecordStatuses();
@@ -298,7 +317,19 @@ export const useAppStore = create<AppState>()(
 
         const initialStores = getInitialStores();
         const initialRooms = getInitialRooms(initialStores);
-        const initialBookings = getInitialBookings(initialRooms);
+        const initialBookingsRaw = getInitialBookings(initialRooms);
+        const initialBookings = initialBookingsRaw.map((b) => {
+          const initialEntry: import('@/types').StatusTimelineEntry = {
+            status: b.status,
+            timestamp: b.createdAt,
+            operatorName: '系统初始化',
+            remark: b.status === 'checked-out' ? '已完成入住' : b.status === 'checked-in' ? '已办理入住' : b.status === 'cancelled' ? '预订已取消' : '预订已确认',
+          };
+          return {
+            ...b,
+            statusHistory: [initialEntry],
+          };
+        });
         const initialClosedDates = getInitialClosedDates(initialRooms);
         const initialMinStayRules = getInitialMinStayRules(initialRooms);
         const initialExtraServices = getInitialExtraServices(initialStores);
@@ -975,9 +1006,17 @@ export const useAppStore = create<AppState>()(
         };
 
         const bookingId = generateId();
+        const { currentUser } = get();
+        const initialEntry: import('@/types').StatusTimelineEntry = {
+          status: 'confirmed',
+          timestamp: now,
+          operatorName: currentUser.name,
+          remark: '候补转预订',
+        };
         const newBooking: Booking = {
           ...bookingData,
           id: bookingId,
+          statusHistory: [initialEntry],
           createdAt: now,
           updatedAt: now,
         };
