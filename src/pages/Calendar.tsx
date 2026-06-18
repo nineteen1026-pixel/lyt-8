@@ -9,6 +9,7 @@ import { BookingStatusColors, BookingStatusLabels, RoomTypeLabels, RoomStatusLab
 import Badge from '@/components/Badge';
 import Modal from '@/components/Modal';
 import BookingForm from './BookingForm';
+import CheckOutInspectionModal from '@/components/CheckOutInspectionModal';
 
 export default function CalendarView() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -32,6 +33,8 @@ export default function CalendarView() {
   const [bookingFormOpen, setBookingFormOpen] = useState(false);
   const [prefillRoomId, setPrefillRoomId] = useState<string | undefined>();
   const [prefillCheckIn, setPrefillCheckIn] = useState<string | undefined>();
+  const [checkOutModalOpen, setCheckOutModalOpen] = useState(false);
+  const [checkOutBooking, setCheckOutBooking] = useState<Booking | null>(null);
 
   useEffect(() => {
     const dateParam = searchParams.get('date');
@@ -57,6 +60,19 @@ export default function CalendarView() {
   const handleCloseModal = () => {
     setSelectedDate(null);
     setSearchParams({});
+  };
+
+  const handleCheckOutClick = (booking: Booking) => {
+    setCheckOutBooking(booking);
+    setCheckOutModalOpen(true);
+  };
+
+  const handleCheckOutComplete = () => {
+    if (checkOutBooking) {
+      updateBookingStatus(checkOutBooking.id, 'checked-out');
+    }
+    setCheckOutModalOpen(false);
+    setCheckOutBooking(null);
   };
 
   const activeRooms = useMemo(() => getRoomsByStore(storeFilter).filter((r) => r.status === 'active'), [storeFilter, getRoomsByStore]);
@@ -701,7 +717,7 @@ export default function CalendarView() {
                                   )}
                                   {roomBooking.status === 'checked-in' && (
                                     <button
-                                      onClick={() => updateBookingStatus(roomBooking.id, 'checked-out')}
+                                      onClick={() => handleCheckOutClick(roomBooking)}
                                       className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-brand-orange/20 text-brand-orange hover:bg-brand-orange/30 transition-colors"
                                     >
                                       <LogOut className="w-3 h-3" />
@@ -730,6 +746,18 @@ export default function CalendarView() {
         prefillRoomId={prefillRoomId}
         prefillCheckIn={prefillCheckIn}
       />
+
+      {checkOutBooking && (
+        <CheckOutInspectionModal
+          open={checkOutModalOpen}
+          onClose={() => {
+            setCheckOutModalOpen(false);
+            setCheckOutBooking(null);
+          }}
+          booking={checkOutBooking}
+          onComplete={handleCheckOutComplete}
+        />
+      )}
     </div>
   );
 }

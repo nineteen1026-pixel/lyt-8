@@ -46,11 +46,12 @@ export default function CheckOutInspectionModal({
   const [showCollectForm, setShowCollectForm] = useState(false);
   const [step, setStep] = useState<'inspection' | 'refund'>('inspection');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [depositRefreshKey, setDepositRefreshKey] = useState(0);
 
   const deposit = useMemo(() => {
     if (!booking) return null;
     return getDepositByBookingId(booking.id);
-  }, [booking, getDepositByBookingId]);
+  }, [booking, getDepositByBookingId, depositRefreshKey]);
 
   const room = useMemo(() => {
     if (!booking) return null;
@@ -138,22 +139,39 @@ export default function CheckOutInspectionModal({
     setDeductionItems(deductionItems.filter((item) => item.id !== id));
   };
 
-  const handleCreateDeposit = () => {
-    if (!booking || !canManageDeposit) return;
+  const handleCreateAndCollectDeposit = () => {
+    if (!booking || !canManageDeposit || depositAmount <= 0) return;
 
-    const existingDeposit = getDepositByBookingId(booking.id);
-    if (existingDeposit) {
-      setShowCollectForm(true);
-      return;
+    let targetDeposit = getDepositByBookingId(booking.id);
+
+    if (!targetDeposit) {
+      const createdDeposit = createDeposit({
+        bookingId: booking.id,
+        totalAmount: depositAmount,
+      });
+      if (createdDeposit) {
+        targetDeposit = getDepositByBookingId(booking.id);
+      }
     }
 
-    const newDeposit = createDeposit({
-      bookingId: booking.id,
-      totalAmount: depositAmount,
-    });
-
-    if (newDeposit) {
-      setShowCollectForm(true);
+    if (targetDeposit) {
+      const amountToCollect = depositAmount - targetDeposit.collectedAmount;
+      if (amountToCollect > 0) {
+        const success = collectDeposit(
+          targetDeposit.id,
+          amountToCollect,
+          paymentMethod,
+          depositNotes || '退房时补收押金'
+        );
+        if (success) {
+          setDepositRefreshKey((prev) => prev + 1);
+          setShowCollectForm(false);
+          setDepositNotes('');
+        }
+      } else {
+        setDepositRefreshKey((prev) => prev + 1);
+        setShowCollectForm(false);
+      }
     }
   };
 
@@ -174,6 +192,7 @@ export default function CheckOutInspectionModal({
     );
 
     if (success) {
+      setDepositRefreshKey((prev) => prev + 1);
       setShowCollectForm(false);
       setDepositNotes('');
     }
@@ -333,7 +352,7 @@ export default function CheckOutInspectionModal({
               </button>
               <button
                 type="button"
-                onClick={handleCreateDeposit}
+                onClick={handleCreateAndCollectDeposit}
                 className="btn-primary"
                 disabled={!canManageDeposit || depositAmount <= 0}
               >
@@ -401,7 +420,7 @@ export default function CheckOutInspectionModal({
               </button>
               <button
                 type="button"
-                onClick={handleCollectDeposit}
+                onClick={handleCreateAndCollectDeposit}
                 className="btn-primary"
                 disabled={!canManageDeposit || depositAmount <= deposit.collectedAmount}
               >

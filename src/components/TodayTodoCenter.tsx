@@ -25,8 +25,10 @@ import {
   TodoCategoryColors,
   TodoCategoryBadgeColors,
   type TodoItem,
+  type Booking,
 } from '@/types';
 import { todayStr, formatDateDisplay } from '@/utils/date';
+import CheckOutInspectionModal from './CheckOutInspectionModal';
 
 const CategoryIcon: Record<TodoCategory, React.ElementType> = {
   checkIn: CalendarCheck,
@@ -48,9 +50,12 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
   const getTodoSummary = useAppStore((s) => s.getTodoSummary);
   const updateCleaningTaskStatus = useAppStore((s) => s.updateCleaningTaskStatus);
   const updateBookingStatus = useAppStore((s) => s.updateBookingStatus);
+  const getBookingById = useAppStore((s) => s.getBookingById);
 
   const [expanded, setExpanded] = useState(true);
   const [activeCategory, setActiveCategory] = useState<TodoCategory | 'all'>('all');
+  const [checkOutModalOpen, setCheckOutModalOpen] = useState(false);
+  const [checkOutBooking, setCheckOutBooking] = useState<Booking | null>(null);
 
   const todos = useMemo(() => getTodayTodos(storeFilter), [getTodayTodos, storeFilter]);
   const summary = useMemo(() => getTodoSummary(storeFilter), [getTodoSummary, storeFilter]);
@@ -72,6 +77,14 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
     navigate(todo.navigatePath);
   };
 
+  const handleCheckOutComplete = () => {
+    if (checkOutBooking) {
+      updateBookingStatus(checkOutBooking.id, 'checked-out');
+    }
+    setCheckOutModalOpen(false);
+    setCheckOutBooking(null);
+  };
+
   const handleQuickComplete = (e: React.MouseEvent, todo: TodoItem) => {
     e.stopPropagation();
     if (todo.targetType === 'cleaning') {
@@ -79,7 +92,11 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
     } else if (todo.targetType === 'booking' && todo.category === 'checkIn') {
       updateBookingStatus(todo.targetId, 'checked-in');
     } else if (todo.targetType === 'booking' && todo.category === 'checkOut') {
-      updateBookingStatus(todo.targetId, 'checked-out');
+      const booking = getBookingById(todo.targetId);
+      if (booking) {
+        setCheckOutBooking(booking);
+        setCheckOutModalOpen(true);
+      }
     }
   };
 
@@ -275,6 +292,18 @@ export default function TodayTodoCenter({ storeFilter = 'all' }: Props) {
             )}
           </div>
         </div>
+      )}
+
+      {checkOutBooking && (
+        <CheckOutInspectionModal
+          open={checkOutModalOpen}
+          onClose={() => {
+            setCheckOutModalOpen(false);
+            setCheckOutBooking(null);
+          }}
+          booking={checkOutBooking}
+          onComplete={handleCheckOutComplete}
+        />
       )}
     </div>
   );
