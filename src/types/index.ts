@@ -283,6 +283,13 @@ export interface Room {
 
 export type BookingStatus = 'confirmed' | 'checked-in' | 'checked-out' | 'cancelled';
 
+export interface StatusTimelineEntry {
+  status: BookingStatus;
+  timestamp: string;
+  operatorName: string;
+  remark?: string;
+}
+
 export interface Booking {
   id: string;
   roomId: string;
@@ -299,6 +306,7 @@ export interface Booking {
   status: BookingStatus;
   notes?: string;
   cancelReason?: string;
+  statusHistory?: StatusTimelineEntry[];
   createdAt: string;
   updatedAt: string;
 }

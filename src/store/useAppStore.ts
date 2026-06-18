@@ -485,10 +485,18 @@ export const useAppStore = create<AppState>()(
         }
 
         const now = new Date().toISOString();
+        const { currentUser } = get();
+        const initialEntry: import('@/types').StatusTimelineEntry = {
+          status: booking.status || 'confirmed',
+          timestamp: now,
+          operatorName: currentUser.name,
+          remark: '创建预订',
+        };
         const newBooking: Booking = {
           ...booking,
           guestPhone: normalizePhone(booking.guestPhone),
           id: generateId(),
+          statusHistory: [initialEntry],
           createdAt: now,
           updatedAt: now,
         };
@@ -540,10 +548,17 @@ export const useAppStore = create<AppState>()(
         if (!get().hasPermission('booking:cancel')) return;
         const now = new Date().toISOString();
         const existing = get().getBookingById(id);
+        const { currentUser } = get();
+        const cancelEntry: import('@/types').StatusTimelineEntry = {
+          status: 'cancelled',
+          timestamp: now,
+          operatorName: currentUser.name,
+          remark: reason ? `取消预订：${reason}` : '取消预订',
+        };
         set((state) => ({
           bookings: state.bookings.map((b) =>
             b.id === id
-              ? { ...b, status: 'cancelled', cancelReason: reason, updatedAt: now }
+              ? { ...b, status: 'cancelled', cancelReason: reason, updatedAt: now, statusHistory: [...(b.statusHistory || []), cancelEntry] }
               : b
           ),
         }));
@@ -564,10 +579,17 @@ export const useAppStore = create<AppState>()(
         }
 
         const now = new Date().toISOString();
+        const { currentUser } = get();
+        const restoreEntry: import('@/types').StatusTimelineEntry = {
+          status: 'confirmed',
+          timestamp: now,
+          operatorName: currentUser.name,
+          remark: '恢复预订',
+        };
         set((s) => ({
           bookings: s.bookings.map((b) =>
             b.id === id
-              ? { ...b, status: 'confirmed', cancelReason: undefined, updatedAt: now }
+              ? { ...b, status: 'confirmed', cancelReason: undefined, updatedAt: now, statusHistory: [...(b.statusHistory || []), restoreEntry] }
               : b
           ),
         }));
@@ -581,9 +603,22 @@ export const useAppStore = create<AppState>()(
         if (status === 'checked-out' && !get().hasPermission('booking:checkout')) return;
         const now = new Date().toISOString();
         const booking = get().bookings.find((b) => b.id === id);
+        const { currentUser } = get();
+        const remarkMap: Record<string, string> = {
+          'checked-in': '办理入住',
+          'checked-out': '办理退房',
+          'confirmed': '确认预订',
+          'cancelled': '取消预订',
+        };
+        const statusEntry: import('@/types').StatusTimelineEntry = {
+          status,
+          timestamp: now,
+          operatorName: currentUser.name,
+          remark: remarkMap[status] || `状态变更为${status}`,
+        };
         set((state) => ({
           bookings: state.bookings.map((b) =>
-            b.id === id ? { ...b, status, updatedAt: now } : b
+            b.id === id ? { ...b, status, updatedAt: now, statusHistory: [...(b.statusHistory || []), statusEntry] } : b
           ),
         }));
 

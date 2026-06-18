@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup, RotateCcw, StickyNote, DollarSign, Clock, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Filter, Phone, User, Calendar, XCircle, CheckCircle2, LogIn, LogOut, UserCircle, ChevronRight, Building2, Coffee, Car, Train, Bed, Sparkles, Ship, Sunrise, Waves, Mountain, Leaf, Soup, RotateCcw, StickyNote, DollarSign, Clock, AlertTriangle, Activity } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { Booking, BookingStatus, GuestProfile, RoomType, ExtraService, Deposit, DepositTransaction } from '@/types';
 import { BookingStatusLabels, BookingStatusColors, RepurchaseLevelLabels, RepurchaseLevelColors, RoomTypeLabels, normalizePhone, ExtraServiceChargeTypeLabels, DepositStatusLabels, DepositStatusColors, DepositTransactionTypeLabels, DeductionCategoryLabels } from '@/types';
@@ -909,6 +909,55 @@ export default function BookingList() {
                 <div className="text-xs text-brand-taupe mb-1">取消原因</div>
                 <div className="p-3 bg-red-50 rounded-lg text-sm text-red-600">
                   {detailBooking.cancelReason}
+                </div>
+              </div>
+            )}
+
+            {detailBooking.statusHistory && detailBooking.statusHistory.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Activity className="w-4 h-4 text-brand-taupe" />
+                  <span className="text-xs text-brand-taupe font-medium">状态变更时间线</span>
+                </div>
+                <div className="relative pl-6">
+                  <div className="absolute left-[9px] top-2 bottom-2 w-0.5 bg-brand-brown/15" />
+                  <div className="space-y-4">
+                    {[...detailBooking.statusHistory].reverse().map((entry, idx) => {
+                      const isLast = idx === 0;
+                      const statusIconMap: Record<string, { icon: React.ReactNode; color: string }> = {
+                        'confirmed': { icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'text-blue-600 bg-blue-100' },
+                        'checked-in': { icon: <LogIn className="w-3.5 h-3.5" />, color: 'text-brand-green bg-green-100' },
+                        'checked-out': { icon: <LogOut className="w-3.5 h-3.5" />, color: 'text-gray-600 bg-gray-100' },
+                        'cancelled': { icon: <XCircle className="w-3.5 h-3.5" />, color: 'text-red-600 bg-red-100' },
+                      };
+                      const statusStyle = statusIconMap[entry.status] || { icon: <Clock className="w-3.5 h-3.5" />, color: 'text-brand-taupe bg-brand-beige' };
+                      return (
+                        <div key={idx} className="relative">
+                          <div className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center ${statusStyle.color} ${isLast ? 'ring-2 ring-white shadow-sm' : ''}`}>
+                            {statusStyle.icon}
+                          </div>
+                          <div className={`${isLast ? '' : 'opacity-70'}`}>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${BookingStatusColors[entry.status]}`}>
+                                {BookingStatusLabels[entry.status]}
+                              </span>
+                              <span className="text-xs text-brand-taupe">
+                                {new Date(entry.timestamp).toLocaleString('zh-CN')}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-xs text-brand-taupe">
+                              操作人：{entry.operatorName}
+                            </div>
+                            {entry.remark && (
+                              <div className="mt-0.5 text-xs text-brand-brown/70">
+                                {entry.remark}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
